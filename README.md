@@ -30,6 +30,34 @@ Response:
 }
 ```
 
+## Docker
+
+Build the backend image locally:
+
+```bash
+docker build -t sidequest-backend .
+```
+
+Run it:
+
+```bash
+docker run --rm -p 3000:3000 sidequest-backend
+```
+
+Then verify:
+
+```bash
+curl http://localhost:3000/health
+```
+
+Images built from `main` are published by GitHub Actions to:
+
+```text
+ghcr.io/sitequestteam/backend
+```
+
+The workflow publishes `latest` for `main` and an immutable `sha-...` tag for each pushed commit. Pull requests only build the image and do not publish it.
+
 ## Available scripts
 
 - `npm run start:dev` — start in watch mode
