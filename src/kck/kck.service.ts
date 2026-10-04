@@ -53,7 +53,7 @@ export class KckService {
       aiSettled.status === 'fulfilled' &&
       aiSettled.value.wynik.status === 'RETAKE'
     ) {
-      return { status: 'RETAKE', ...aiSettled.value.wynik };
+      return aiSettled.value.wynik;
     }
 
     const ai =
