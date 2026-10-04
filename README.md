@@ -101,7 +101,7 @@ Main endpoints:
 - `POST /kck/submit` — send the draft to KCK; 30 points only after `incidentId`, exactly once
 - `POST /kck/interest` — `{ draftId, incidentId }`: the Player says it is the same City incident; nothing goes to KCK, 5 points
 - `GET /kck/incidents/:id`, `GET /kck/incidents/:id/photo`
-- `/admin/*` — optional, Bearer-token-protected presentation administration API; it is available only with `ADMIN_API_ENABLED=true` and `ADMIN_API_TOKEN` set
+- `/admin/*` — optional, Bearer-token-protected presentation administration API; it is available only with `ADMIN_API_ENABLED=true` and an `ADMIN_API_TOKEN` value (Docker Swarm prefers `/run/secrets/ADMIN_API_TOKEN`)
 
 Points: Initiative 100, Vote 10, Threshold bonus 50 for the Initiator and every voter, City incident 30, Interest 5. City incidents are never on the map. Reward redemption lowers the spendable balance but not total points earned/rank progress.
 

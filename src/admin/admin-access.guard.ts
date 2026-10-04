@@ -5,6 +5,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { readAdminApiToken } from '../config/admin-api-token';
 
 @Injectable()
 export class AdminAccessGuard implements CanActivate {
@@ -13,7 +14,7 @@ export class AdminAccessGuard implements CanActivate {
       throw new NotFoundException();
     }
 
-    const expectedToken = process.env.ADMIN_API_TOKEN;
+    const expectedToken = readAdminApiToken();
     const authorization = context.switchToHttp().getRequest().headers.authorization;
     if (!expectedToken || authorization !== `Bearer ${expectedToken}`) {
       throw new UnauthorizedException();
