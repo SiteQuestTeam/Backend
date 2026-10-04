@@ -3,25 +3,33 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY package*.json ./
+COPY prisma ./prisma
 RUN npm install
 
 COPY nest-cli.json tsconfig*.json ./
 COPY src ./src
 COPY prompts ./prompts
 
-RUN npm run build && npm prune --omit=dev
+ENV DATABASE_URL=file:./dev.db
+RUN npm run db:setup && npm run build && npm prune --omit=dev
 
 FROM node:20-alpine AS runtime
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV DATABASE_URL=file:./dev.db
 
 WORKDIR /app
 
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY --from=build --chown=node:node /app/prisma ./prisma
 COPY --from=build /app/prompts ./prompts
+
+# Zdjęcia Usterek i Inicjatyw są trwałymi danymi aplikacji.
+RUN mkdir -p /app/data && chown -R node:node /app/data
+VOLUME ["/app/data"]
 
 USER node
 

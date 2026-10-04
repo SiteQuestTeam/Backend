@@ -5,13 +5,15 @@ import { stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline';
 import {
   BriefInicjatywy,
-  BriefUsterki,
   DaneKrok1,
+  KategoriaKck,
+  KckAiResult,
   Koszt,
   Odpowiedz,
   Typ,
   WynikKrok1,
   ZgloszenieWPoblizu,
+  kck,
   krok1,
   krok2,
   ktoNaprawi,
@@ -22,7 +24,10 @@ import {
 const TEKST = {
   zagrozenie: (opis: string) => `⚠️ AI widzi możliwe zagrożenie: ${opis}`,
   zagrozeniePytanie: 'Czy to naprawdę się dzieje?',
-  zagrozenieTak: 'Odejdź od tego miejsca i zadzwoń pod 112. Tego nie zgłaszamy w SideQuest, bo tu potrzebne są służby ratunkowe.',
+  zagrozenieTak:
+    '1. Odejdź na bezpieczną odległość. Nie dotykaj. Ostrzeż ludzi obok.\n2. Zadzwoń po pomoc. Tego nie zgłaszamy w SideQuest, bo tu potrzebne są służby ratunkowe.',
+  zagrozenieTelefony: (energia: boolean) => `📞 112 (numer alarmowy)${energia ? '\n⚡ 991 (Pogotowie Energetyczne)' : ''}`,
+  zagrozenieBezPunktow: 'Za zgłoszenie zagrożenia nie ma Punktów. Twoje bezpieczeństwo jest ważniejsze niż zdjęcie.',
   zagrozenieNie: 'Dzięki. Idziemy dalej.',
   przechodnie:
     '👤 Na zdjęciu widać przechodniów. Są tylko szczegółem ulicy, więc zdjęcie może trafić na mapę. Prawo autorskie (art. 81 ust. 2 pkt 2) pozwala pokazać osobę, która jest tylko szczegółem większej całości, na przykład zgromadzenia albo krajobrazu.',
@@ -115,8 +120,14 @@ async function main(): Promise<void> {
       console.log(TEKST.zagrozenie(w1.danger));
       // AI może się pomylić, więc pytamy Gracza. Potwierdzenie kończy rozmowę, zaprzeczenie pozwala iść dalej.
       const tak = (await zapytaj(`${TEKST.zagrozeniePytanie} (t = tak, widzę to / n = nie, nic takiego tu nie ma)`)).toLowerCase().startsWith('t');
-      console.log(tak ? TEKST.zagrozenieTak : TEKST.zagrozenieNie);
-      if (tak) return;
+      if (tak) {
+        // Bez Punktów i bez pytania o odległość: nie nagradzamy podchodzenia do zagrożenia.
+        console.log(TEKST.zagrozenieTak);
+        console.log(TEKST.zagrozenieTelefony(w1.danger_kind === 'energia'));
+        console.log(szary(TEKST.zagrozenieBezPunktow));
+        return;
+      }
+      console.log(TEKST.zagrozenieNie);
     }
     if (w1.status === 'ok' && w1.faces_in_background) console.log(szary(TEKST.przechodnie));
     if (w1.status === 'ok') break;
@@ -164,14 +175,31 @@ async function main(): Promise<void> {
     if (odp.toLowerCase() === 'z') typ = inny;
   }
 
-  const odpowiedzi: Odpowiedz[] = [];
-  if (typ === 'inicjatywa') {
-    for (const [i, p] of w1.questions.entries()) {
-      ekran(`Pytanie ${i + 1} z ${w1.questions.length}`);
-      console.log(pogrubiony(p.question));
-      console.log(`💡 Dlaczego pytam: ${TEKST.dlaczegoPytam[p.topic]}`);
-      odpowiedzi.push({ temat: p.topic, pytanie: p.question, odpowiedz: await wybierz('Odpowiedź:', p.suggestions) });
+  // Usterka: jedno wywołanie promptu KCK, bez rozmowy.
+  if (typ === 'usterka') {
+    console.log(szary('  …AI przygotowuje zgłoszenie do KCK'));
+    const { wynik, ostrzezenia, koszt } = await kck(zdjecie, {
+      linia_gracza: dane.linia_gracza,
+      kategoria_podpowiedz: typ === w1.type ? (w1.category as KategoriaKck | null) : null,
+    });
+    pokazKoszt(koszt, ostrzezenia);
+    if (wynik.status === 'RETAKE') {
+      ekran(`Nowe zdjęcie: ${wynik.reason}`);
+      console.log(wynik.message);
+    } else {
+      pokazUsterke(wynik);
     }
+    console.log(szary(`\nKoszt całej rozmowy: ok. $${kosztSesji.toFixed(4)}. Log: logs/ai.jsonl`));
+    return;
+  }
+
+  // Inicjatywa: pytania, potem krok 2.
+  const odpowiedzi: Odpowiedz[] = [];
+  for (const [i, p] of w1.questions.entries()) {
+    ekran(`Pytanie ${i + 1} z ${w1.questions.length}`);
+    console.log(pogrubiony(p.question));
+    console.log(`💡 Dlaczego pytam: ${TEKST.dlaczegoPytam[p.topic]}`);
+    odpowiedzi.push({ temat: p.topic, pytanie: p.question, odpowiedz: await wybierz('Odpowiedź:', p.suggestions) });
   }
 
   // Krok 2: przy „niezrozumiale” pytamy jeszcze raz, przy pytaniu zwrotnym raz dopytujemy.
@@ -180,7 +208,6 @@ async function main(): Promise<void> {
   for (;;) {
     console.log(szary('  …AI pisze Brief'));
     const { wynik, ostrzezenia, koszt } = await krok2(zdjecie, {
-      typ,
       kategoria: typ === w1.type ? w1.category : null,
       linia_gracza: dane.linia_gracza,
       odpowiedzi,
@@ -215,25 +242,29 @@ async function main(): Promise<void> {
   console.log(szary(`\nKoszt całej rozmowy: ok. $${kosztSesji.toFixed(4)}. Log: logs/ai.jsonl`));
 }
 
-function pokazBrief(brief: BriefInicjatywy | BriefUsterki): void {
+function pokazBrief(brief: BriefInicjatywy): void {
   const ai = (zrodlo: string) => (zrodlo === 'ai' ? '✨ propozycja AI: ' : '');
-  if (brief.type === 'inicjatywa') {
-    ekran('Brief Inicjatywy');
-    console.log(`Tytuł: ${brief.title}`);
-    console.log(`Kategoria: ${brief.category}`);
-    console.log(`Problem: ${brief.problem}`);
-    console.log(`Proponowane działanie: ${ai(brief.proposed_action.source)}${brief.proposed_action.text}`);
-    console.log(`Dlaczego to ważne: ${brief.why_it_matters}`);
-    console.log(`Potrzebne zasoby: ${ai(brief.resources.source)}${brief.resources.text}`);
-    console.log(`Kto naprawi: ${ktoNaprawi(brief)} (pewność: ${brief.who_fixes.confidence}). ${brief.who_fixes.reason}`);
-    console.log('[ Popraw ]   [ Opublikuj ]');
-  } else {
-    ekran('Zgłoszenie Usterki do KCK');
-    console.log(`Tytuł: ${brief.summary}`);
-    console.log(`Kategoria KCK: ${brief.category}`);
-    console.log(`Opis: ${brief.description}`);
-    console.log('[ Popraw ]   [ Wyślij do KCK ]');
-  }
+  ekran('Brief Inicjatywy');
+  console.log(`Tytuł: ${brief.title}`);
+  console.log(`Kategoria: ${brief.category}`);
+  console.log(`Problem: ${brief.problem}`);
+  console.log(`Proponowane działanie: ${ai(brief.proposed_action.source)}${brief.proposed_action.text}`);
+  console.log(`Dlaczego to ważne: ${brief.why_it_matters}`);
+  const r = brief.resources;
+  console.log(`Potrzebne zasoby: ${ai(r.source)}`);
+  console.log(`  Ludzie: ${r.people || '-'}`);
+  console.log(`  Sprzęt: ${r.equipment || '-'}`);
+  console.log(`  Transport: ${r.transport || '-'}`);
+  console.log(`Kto naprawi: ${ktoNaprawi(brief)} (pewność: ${brief.who_fixes.confidence}). ${brief.who_fixes.reason}`);
+  console.log('[ Popraw ]   [ Opublikuj ]');
+}
+
+function pokazUsterke(u: Extract<KckAiResult, { status: 'OK' }>): void {
+  ekran('Zgłoszenie Usterki do KCK');
+  console.log(`Tytuł: ${u.summary}`);
+  console.log(`Kategoria KCK: ${u.category}`);
+  console.log(`Opis: ${u.description}`);
+  console.log('[ Popraw ]   [ Wyślij do KCK ]');
 }
 
 main()

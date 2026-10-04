@@ -13,6 +13,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // Zdjęcie w base64 jest większe niż domyślny limit 100 kB.
   app.useBodyParser('json', { limit: '15mb' });
+  app.enableCors();
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

@@ -82,7 +82,8 @@
 // Stałe teksty z ai/stale-teksty.md w repo Project-context-.
 const TEKST = {
   zagrozenie: (opis) => `⚠️ AI widzi możliwe zagrożenie: ${opis}\n\nCzy to naprawdę się dzieje?`,
-  zagrozenieTak: 'Odejdź od tego miejsca i zadzwoń pod 112. Tego nie zgłaszamy w SideQuest, bo tu potrzebne są służby ratunkowe.',
+  zagrozenieTak: '1. Odejdź na bezpieczną odległość. Nie dotykaj. Ostrzeż ludzi obok.\n2. Zadzwoń po pomoc. Tego nie zgłaszamy w SideQuest, bo tu potrzebne są służby ratunkowe.',
+  zagrozenieBezPunktow: 'Za zgłoszenie zagrożenia nie ma Punktów. Twoje bezpieczeństwo jest ważniejsze niż zdjęcie.',
   zagrozenieNie: 'Dzięki. Idziemy dalej.',
   przechodnie: '👤 Na zdjęciu widać przechodniów. Są tylko szczegółem ulicy, więc zdjęcie może trafić na mapę. Prawo autorskie (art. 81 ust. 2 pkt 2) pozwala pokazać osobę, która jest tylko szczegółem większej całości, na przykład zgromadzenia albo krajobrazu.',
   opiszZmiane: 'Nie widzę tu usterki. Napisz, co chcesz zmienić w tym miejscu.',
@@ -215,10 +216,10 @@ function tekst({ podpis, podpowiedzi = [], wymagane = true, przycisk = 'Wyślij'
 // ---------- wywołanie backendu ----------
 async function ai(krok, dane) {
   for (;;) {
-    const myslenie = wiadomosc('ai myslenie', krok === 1 ? 'AI ogląda zdjęcie…' : 'AI pisze Brief…');
+    const myslenie = wiadomosc('ai myslenie', krok === 1 ? 'AI ogląda zdjęcie…' : krok === 'kck' ? 'AI przygotowuje zgłoszenie do KCK…' : 'AI pisze Brief…');
     wyczyscPanel();
     try {
-      const odp = await fetch(`/ai/krok-${krok}`, {
+      const odp = await fetch(krok === 'kck' ? '/ai/kck' : `/ai/krok-${krok}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ zdjecie, dane }),
@@ -315,8 +316,19 @@ async function przebieg(linia) {
       wiadomosc('alarm', TEKST.zagrozenie(w1.danger));
       // AI może się pomylić, więc pytamy Gracza. Potwierdzenie kończy rozmowę, zaprzeczenie pozwala iść dalej.
       const tak = await przyciski([{ etykieta: 'Tak, widzę to', wartosc: true }, { etykieta: 'Nie, nic takiego tu nie ma', wartosc: false, glowny: true }]);
-      wiadomosc(tak ? 'alarm' : 'ai', tak ? TEKST.zagrozenieTak : TEKST.zagrozenieNie);
-      if (tak) return;
+      if (tak) {
+        // Bez Punktów i bez pytania o odległość: nie nagradzamy podchodzenia do zagrożenia.
+        const telefony = el('div', 'przyciski');
+        telefony.style.marginTop = '10px';
+        const tel = (numer, etykieta) => { const a = el('a', 'plik', etykieta); a.href = `tel:${numer}`; a.style.textDecoration = 'none'; return a; };
+        telefony.append(tel('112', '📞 Zadzwoń pod 112'));
+        if (w1.danger_kind === 'energia') telefony.append(tel('991', '⚡ Pogotowie Energetyczne 991'));
+        const tresc = el('div');
+        tresc.append(telefony, el('div', 'podpis', TEKST.zagrozenieBezPunktow));
+        wiadomosc('alarm', TEKST.zagrozenieTak, tresc);
+        return;
+      }
+      wiadomosc('ai', TEKST.zagrozenieNie);
     }
     if (w1.status === 'ok' && w1.faces_in_background) wiadomosc('ai', TEKST.przechodnie);
     if (w1.status === 'ok') break;
@@ -363,18 +375,31 @@ async function przebieg(linia) {
     ]);
   }
 
-  const odpowiedzi = [];
-  if (typ === 'inicjatywa') {
-    for (const [i, p] of w1.questions.entries()) {
-      ekran(`Pytanie ${i + 1} z ${w1.questions.length}`);
-      wiadomosc('ai', p.question, lekcja(`Dlaczego pytam: ${TEKST.dlaczegoPytam[p.topic]}`));
-      odpowiedzi.push({ temat: p.topic, pytanie: p.question, odpowiedz: await tekst({ podpowiedzi: p.suggestions }) });
+  // Usterka: jedno wywołanie promptu KCK, bez rozmowy.
+  if (typ === 'usterka') {
+    const wk = await ai('kck', {
+      linia_gracza: dane1.linia_gracza,
+      kategoria_podpowiedz: typ === w1.type ? w1.category : null,
+    });
+    if (wk.status === 'RETAKE') {
+      ekran(`Nowe zdjęcie: ${wk.reason}`);
+      wiadomosc('ai', wk.message);
+      return;
     }
-    if (!w1.questions.length) dodaj(el('div', 'ostrzezenie', '⚠️ AI nie dało pytań, a typ to Inicjatywa. Brief powstanie bez odpowiedzi.'));
+    await pokazBrief({ type: 'usterka', category: wk.category, summary: wk.summary, description: wk.description });
+    return;
   }
 
+  // Inicjatywa: pytania, potem krok 2.
+  const odpowiedzi = [];
+  for (const [i, p] of w1.questions.entries()) {
+    ekran(`Pytanie ${i + 1} z ${w1.questions.length}`);
+    wiadomosc('ai', p.question, lekcja(`Dlaczego pytam: ${TEKST.dlaczegoPytam[p.topic]}`));
+    odpowiedzi.push({ temat: p.topic, pytanie: p.question, odpowiedz: await tekst({ podpowiedzi: p.suggestions }) });
+  }
+  if (!w1.questions.length) dodaj(el('div', 'ostrzezenie', '⚠️ AI nie dało pytań, a typ to Inicjatywa. Brief powstanie bez odpowiedzi.'));
+
   const dane2 = {
-    typ,
     kategoria: typ === w1.type ? w1.category : null,
     linia_gracza: dane1.linia_gracza,
     odpowiedzi,
@@ -421,7 +446,9 @@ async function pokazBrief(b) {
     pole('Problem', b.problem);
     pole('Proponowane działanie', b.proposed_action.text, b.proposed_action.source);
     pole('Dlaczego to ważne', b.why_it_matters);
-    pole('Potrzebne zasoby', b.resources.text, b.resources.source);
+    pole('Potrzebne zasoby', `Ludzie: ${b.resources.people || '-'}
+Sprzęt: ${b.resources.equipment || '-'}
+Transport: ${b.resources.transport || '-'}`, b.resources.source);
     const kto = b.who_fixes.city_needed ? 'Miasto' : 'Gracze';
     pole('Kto naprawi', `${kto} (pewność: ${b.who_fixes.confidence})\n${b.who_fixes.reason}`);
     pole('Miejsce', ADRES);

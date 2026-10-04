@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SideQuest: zdjęcie Usterki → pola zgłoszenia KCK",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "retake_reason", "message", "category", "summary", "description"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["OK", "RETAKE"],
+      "description": "OK = widać prawdziwą usterkę i pola są wypełnione. RETAKE = potrzebne nowe zdjęcie."
+    },
+    "retake_reason": {
+      "anyOf": [
+        { "type": "string", "enum": ["NO_INCIDENT", "POOR_QUALITY", "FACES_OR_PLATES", "INAPPROPRIATE"] },
+        { "type": "null" }
+      ],
+      "description": "Tylko przy RETAKE."
+    },
+    "message": {
+      "anyOf": [{ "type": "string" }, { "type": "null" }],
+      "description": "Tylko przy RETAKE: jedno zdanie do Gracza, jak zrobić lepsze zdjęcie."
+    },
+    "category": {
+      "anyOf": [
+        { "type": "string", "enum": ["DAMAGE", "POLLUTION", "GREENERY", "ANIMALS", "OTHER"] },
+        { "type": "null" }
+      ],
+      "description": "Kategoria KCK. OTHER = prawdziwa usterka spoza czterech kategorii, nigdy „nie wiem”. Na serviceExternalId zamienia ją backend."
+    },
+    "summary": {
+      "anyOf": [{ "type": "string" }, { "type": "null" }],
+      "description": "Tytuł do 60 znaków (pole summary w KCK)."
+    },
+    "description": {
+      "anyOf": [{ "type": "string" }, { "type": "null" }],
+      "description": "1–3 zdania, do 500 znaków (pole description w KCK)."
+    }
+  }
+}
