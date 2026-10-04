@@ -3,6 +3,7 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OpenAI } from 'openai';
+import { readOpenAiApiKey } from '../config/openai-api-key';
 // sharp 0.35 podaje typy ESM, a ten projekt kompiluje się do CommonJS, więc require z typem.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sharp = require('sharp') as typeof import('sharp').default;
@@ -145,7 +146,7 @@ const KATALOG_LOGOW = join(process.cwd(), 'logs');
 
 let klient: OpenAI | undefined;
 function openai(): OpenAI {
-  klient ??= new OpenAI();
+  klient ??= new OpenAI({ apiKey: readOpenAiApiKey() });
   return klient;
 }
 
