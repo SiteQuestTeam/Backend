@@ -11,10 +11,14 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { Response } from 'express';
 import { KategoriaKck } from '../ai/ai-core';
 import { KckService } from './kck.service';
 import { UploadedPhoto } from './kck.types';
+
+interface HttpResponse {
+  type(mimeType: string): HttpResponse;
+  send(body: Buffer): void;
+}
 
 @Controller('kck')
 export class KckController {
@@ -85,7 +89,7 @@ export class KckController {
   @Get('incidents/:id/photo')
   async getPhoto(
     @Param('id') id: string,
-    @Res() response: Response,
+    @Res() response: HttpResponse,
   ): Promise<void> {
     const photo = await this.kck.getPhoto(id);
     response.type(photo.mimeType).send(photo.buffer);
