@@ -72,6 +72,18 @@ test('admin accepts only operational KCK statuses', async () => {
   );
 });
 
+test('admin cannot reopen a submitted KCK report', async () => {
+  const prisma = {
+    cityIncident: { findUnique: async () => ({ id: 'incident-1', status: 'SUBMITTED' }) },
+  };
+  const service = new AdminService(prisma as any, {} as any);
+
+  await assert.rejects(
+    () => service.updateCityIncident('incident-1', { status: 'PREPARED' }),
+    { status: 409 },
+  );
+});
+
 test('admin initiative creation delegates to the public domain workflow', async () => {
   const input = { playerId: 'player-1', title: 'New initiative' };
   const initiatives = { create: async (received: unknown) => ({ received }) };

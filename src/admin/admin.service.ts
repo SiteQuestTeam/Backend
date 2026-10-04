@@ -178,8 +178,14 @@ export class AdminService {
   }
 
   async updateCityIncident(id: string, input: CityIncidentInput) {
+    const status = input.status === undefined ? undefined : this.cityIncidentStatus(input.status);
+    const incident = await this.prisma.cityIncident.findUnique({ where: { id } });
+    if (!incident) throw new NotFoundException('City incident not found.');
+    if (status && ['SUBMITTED', 'INTEREST'].includes(incident.status) && status !== incident.status) {
+      throw new ConflictException('A completed city incident cannot be reopened.');
+    }
     const data = {
-      ...(input.status === undefined ? {} : { status: this.cityIncidentStatus(input.status) }),
+      ...(status === undefined ? {} : { status }),
       ...(input.category === undefined
         ? {}
         : { category: this.optionalAdminText(input.category, 'category', 60) }),
@@ -196,12 +202,7 @@ export class AdminService {
     if (Object.keys(data).length === 0) {
       throw new BadRequestException('Provide at least one editable field.');
     }
-    try {
-      return await this.prisma.cityIncident.update({ where: { id }, data });
-    } catch (error) {
-      if (this.isMissingRecord(error)) throw new NotFoundException('City incident not found.');
-      throw error;
-    }
+    return this.prisma.cityIncident.update({ where: { id }, data });
   }
 
   private nickname(value: string) {
@@ -259,9 +260,4 @@ export class AdminService {
     return value.trim() || null;
   }
 
-  private isMissingRecord(error: unknown) {
-    return Boolean(
-      error && typeof error === 'object' && 'code' in error && error.code === 'P2025',
-    );
-  }
 }
