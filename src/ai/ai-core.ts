@@ -77,7 +77,7 @@ export interface BriefInicjatywy {
   problem: string;
   proposed_action: { text: string; source: Zrodlo };
   why_it_matters: string;
-  resources: { text: string; source: Zrodlo };
+  resources: { people: string; equipment: string; transport: string; source: Zrodlo };
   who_fixes: { city_needed: boolean; reason: string; confidence: 'niska' | 'srednia' | 'wysoka' };
 }
 
@@ -265,6 +265,23 @@ export function ktoNaprawi(brief: BriefInicjatywy): 'Miasto' | 'Gracze' {
   return brief.who_fixes.city_needed ? 'Miasto' : 'Gracze';
 }
 
+/** Brief w kształcie, który aplikacja pokazuje do poprawy i wysyła bez zmian do POST /initiatives. */
+export function briefDlaAplikacji(brief: BriefInicjatywy) {
+  return {
+    title: brief.title,
+    category: brief.category,
+    problem: brief.problem,
+    proposedAction: brief.proposed_action.text,
+    whyImportant: brief.why_it_matters,
+    resources: {
+      people: brief.resources.people,
+      equipment: brief.resources.equipment,
+      transport: brief.resources.transport,
+    },
+    fixer: ktoNaprawi(brief),
+  };
+}
+
 // Limity znaków z Budżetu Obywatelskiego. Tryb strict OpenAI ich nie wymusza, więc sprawdzamy je tutaj.
 function dlugosc(ostrzezenia: string[], pole: string, tekst: string | null, max: number, min = 0): void {
   if (tekst === null) return;
@@ -295,7 +312,10 @@ function sprawdzKrok2(w: WynikKrok2): string[] {
   dlugosc(o, 'problem', b.problem, 250, 60);
   dlugosc(o, 'proposed_action', b.proposed_action.text, 250);
   dlugosc(o, 'why_it_matters', b.why_it_matters, 250);
-  dlugosc(o, 'resources', b.resources.text, 250);
+  dlugosc(o, 'resources.people', b.resources.people, 150);
+  dlugosc(o, 'resources.equipment', b.resources.equipment, 150);
+  dlugosc(o, 'resources.transport', b.resources.transport, 150);
+  if (!b.resources.people && !b.resources.equipment && !b.resources.transport) o.push('resources: wszystkie trzy pola są puste');
   dlugosc(o, 'who_fixes.reason', b.who_fixes.reason, 150);
   return o;
 }

@@ -15,7 +15,13 @@ export class KckAmbiguousError extends Error {}
 
 @Injectable()
 export class KckClient {
+  // Domyślnie mock: testy i próby demo nie wysyłają prawdziwych zgłoszeń do Miasta.
+  // Prawdziwe KCK tylko przy KCK_MODE=live.
+  readonly live = process.env.KCK_MODE === 'live';
+
   async submitIncident(dto: KckIncidentDto, photo: { buffer: Buffer; mimeType: string; fileName: string }): Promise<string> {
+    if (!this.live) return `MOCK-${Date.now()}`;
+
     const form = new FormData();
     form.append('dto', JSON.stringify(dto));
     form.append('file', new Blob([new Uint8Array(photo.buffer)], { type: photo.mimeType }), photo.fileName);

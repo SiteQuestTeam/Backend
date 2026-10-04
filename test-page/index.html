@@ -446,7 +446,9 @@ async function pokazBrief(b) {
     pole('Problem', b.problem);
     pole('Proponowane działanie', b.proposed_action.text, b.proposed_action.source);
     pole('Dlaczego to ważne', b.why_it_matters);
-    pole('Potrzebne zasoby', b.resources.text, b.resources.source);
+    pole('Potrzebne zasoby', `Ludzie: ${b.resources.people || '-'}
+Sprzęt: ${b.resources.equipment || '-'}
+Transport: ${b.resources.transport || '-'}`, b.resources.source);
     const kto = b.who_fixes.city_needed ? 'Miasto' : 'Gracze';
     pole('Kto naprawi', `${kto} (pewność: ${b.who_fixes.confidence})\n${b.who_fixes.reason}`);
     pole('Miejsce', ADRES);

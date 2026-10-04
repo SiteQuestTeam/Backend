@@ -17,6 +17,11 @@ export class PlayersController {
 
   @Get(':id/points')
   getPointsHistory(@Param('id') id: string) {
+    return this.players.pointsLedger(id);
+  }
+
+  @Get(':id/history')
+  getHistory(@Param('id') id: string) {
     return this.players.history(id);
   }
 }

@@ -126,12 +126,23 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "text",
+            "people",
+            "equipment",
+            "transport",
             "source"
           ],
           "properties": {
-            "text": {
-              "type": "string"
+            "people": {
+              "type": "string",
+              "description": "Ludzie: ile osób i do czego. Pusty tekst, gdy nikt nie jest potrzebny."
+            },
+            "equipment": {
+              "type": "string",
+              "description": "Sprzęt i materiały. Pusty tekst, gdy niepotrzebne."
+            },
+            "transport": {
+              "type": "string",
+              "description": "Transport. Pusty tekst, gdy niepotrzebny."
             },
             "source": {
               "$ref": "#/$defs/zrodlo"

@@ -1,10 +1,18 @@
 export const VOTING_RADIUS_METERS = 50;
 export const DEFAULT_VOTE_THRESHOLD = 10;
 
+// Interes i Usterka: ten sam promień co Głos.
+export const NEARBY_RADIUS_METERS = VOTING_RADIUS_METERS;
+
 export const POINTS = {
   initiativeCreated: 100,
   voteCast: 10,
+  // Dostaje Inicjator i każdy, kto oddał Głos, gdy Inicjatywa dobije do Progu.
   initiativePassedBonus: 50,
+  // Tylko po incidentId z KCK, dokładnie raz.
+  cityIncidentSubmitted: 30,
+  // „To ta sama Usterka”: mniej niż pierwsze zgłoszenie.
+  cityIncidentInterest: 5,
 } as const;
 
 export function rankFor(totalPointsEarned: number): string {

@@ -18,6 +18,8 @@ model Player {
   votes             Vote[]
   redemptions       RewardRedemption[]
   pointTransactions PointTransaction[]
+  cityIncidents     CityIncident[]
+  interests         Interest[]
 }
 
 model Initiative {
@@ -99,4 +101,52 @@ model PointTransaction {
   player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@index([playerId, createdAt])
+}
+
+// Usterka: zgłoszenie do KCK. Nie ma jej na mapie, bo nikt na nią nie głosuje.
+// PREPARED -> SUBMITTING -> SUBMITTED | FAILED | UNCERTAIN, albo INTEREST,
+// gdy Gracz uznał, że to ta sama Usterka co wysłana wcześniej w pobliżu.
+model CityIncident {
+  id              String     @id
+  playerId        String
+  player          Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  latitude        Float
+  longitude       Float
+  category        String?
+  summary         String?
+  description     String?
+  streetName      String?
+  buildingNumber  String?
+  zipCode         String?
+  photoKey        String
+  photoMimeType   String
+  photoName       String
+  photoSize       Int
+  status          String     @default("PREPARED")
+  submissionId    String?
+  kckIncidentId   String?
+  lastError       String?
+  pointsGrantedAt DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  interests       Interest[]
+
+  @@index([status, category])
+  @@index([playerId])
+}
+
+// Interes: „to ta sama Usterka”. Jeden na Gracza i Usterkę. Nie idzie do KCK.
+model Interest {
+  id             String       @id @default(cuid())
+  playerId       String
+  cityIncidentId String
+  latitude       Float
+  longitude      Float
+  distanceM      Float
+  createdAt      DateTime     @default(now())
+  player         Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  cityIncident   CityIncident @relation(fields: [cityIncidentId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, cityIncidentId])
+  @@index([cityIncidentId])
 }

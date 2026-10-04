@@ -250,7 +250,11 @@ function pokazBrief(brief: BriefInicjatywy): void {
   console.log(`Problem: ${brief.problem}`);
   console.log(`Proponowane działanie: ${ai(brief.proposed_action.source)}${brief.proposed_action.text}`);
   console.log(`Dlaczego to ważne: ${brief.why_it_matters}`);
-  console.log(`Potrzebne zasoby: ${ai(brief.resources.source)}${brief.resources.text}`);
+  const r = brief.resources;
+  console.log(`Potrzebne zasoby: ${ai(r.source)}`);
+  console.log(`  Ludzie: ${r.people || '-'}`);
+  console.log(`  Sprzęt: ${r.equipment || '-'}`);
+  console.log(`  Transport: ${r.transport || '-'}`);
   console.log(`Kto naprawi: ${ktoNaprawi(brief)} (pewność: ${brief.who_fixes.confidence}). ${brief.who_fixes.reason}`);
   console.log('[ Popraw ]   [ Opublikuj ]');
 }

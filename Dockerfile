@@ -27,7 +27,11 @@ COPY --from=build /app/dist ./dist
 COPY --from=build --chown=node:node /app/prisma ./prisma
 COPY --from=build /app/prompts ./prompts
 
-# Zdjęcia i metadane Usterek są trwałymi danymi aplikacji.\nRUN mkdir -p /app/data && chown -R node:node /app/data\nVOLUME [\"/app/data\"]\n\nUSER node
+# Zdjęcia Usterek i Inicjatyw są trwałymi danymi aplikacji.
+RUN mkdir -p /app/data && chown -R node:node /app/data
+VOLUME ["/app/data"]
+
+USER node
 
 EXPOSE 3000
 

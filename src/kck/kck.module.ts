@@ -1,21 +1,11 @@
 import { Module } from '@nestjs/common';
-import { AddressService } from '../address/address.service';
-import { PointsService } from '../points/points.service';
-import { PhotoStorageService } from '../storage/photo-storage.service';
-import { CityIncidentStore } from './city-incident.store';
 import { KckClient } from './kck.client';
 import { KckController } from './kck.controller';
 import { KckService } from './kck.service';
 
+// PrismaService, PointsService, AddressService i PhotoStorageService są globalne.
 @Module({
   controllers: [KckController],
-  providers: [
-    KckService,
-    KckClient,
-    CityIncidentStore,
-    AddressService,
-    PhotoStorageService,
-    PointsService,
-  ],
+  providers: [KckService, KckClient],
 })
 export class KckModule {}

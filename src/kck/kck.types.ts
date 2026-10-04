@@ -20,26 +20,8 @@ export interface StoredPhoto {
   size: number;
 }
 
-export type CityIncidentStatus = 'PREPARED' | 'SUBMITTING' | 'SUBMITTED' | 'FAILED' | 'UNCERTAIN';
-
-export interface CityIncidentRecord {
-  id: string;
-  playerId: string | null;
-  latitude: number;
-  longitude: number;
-  category: KckCategory | null;
-  summary: string | null;
-  description: string | null;
-  address: IncidentAddress | null;
-  photo: StoredPhoto;
-  status: CityIncidentStatus;
-  submissionId: string | null;
-  kckIncidentId: string | null;
-  lastError: string | null;
-  pointsGrantedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+// INTEREST: Gracz uznał, że to ta sama Usterka co wysłana wcześniej w pobliżu. Nie idzie do KCK.
+export type CityIncidentStatus = 'PREPARED' | 'SUBMITTING' | 'SUBMITTED' | 'FAILED' | 'UNCERTAIN' | 'INTEREST';
 
 export interface KckIncidentDto {
   requestType: 'ISSUE';
@@ -71,4 +53,9 @@ export interface SubmitKckInput {
   streetName: string;
   buildingNumber: string;
   zipCode: string;
+}
+
+export interface InterestInput {
+  draftId: string;
+  incidentId: string;
 }

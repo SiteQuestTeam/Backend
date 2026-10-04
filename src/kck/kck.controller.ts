@@ -81,6 +81,20 @@ export class KckController {
     });
   }
 
+  // Gracz uczciwie mówi: „to ta sama Usterka”. Nic nie idzie do KCK.
+  @Post('interest')
+  interest(@Body() body: Record<string, unknown>) {
+    for (const key of ['draftId', 'incidentId']) {
+      if (typeof body[key] !== 'string') {
+        throw new BadRequestException(`Pole ${key} musi być stringiem.`);
+      }
+    }
+    return this.kck.interest({
+      draftId: body.draftId as string,
+      incidentId: body.incidentId as string,
+    });
+  }
+
   @Get('incidents/:id')
   getIncident(@Param('id') id: string) {
     return this.kck.getIncident(id);

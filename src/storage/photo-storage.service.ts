@@ -5,17 +5,25 @@ import { extname, join } from 'node:path';
 import { KCK_MAX_PHOTO_BYTES } from '../kck/kck.constants';
 import { StoredPhoto, UploadedPhoto } from '../kck/kck.types';
 
+export type PhotoFolder = 'kck' | 'initiatives';
+
+const BY_MIME: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/heic': '.heic',
+  'image/heif': '.heif',
+};
+
 @Injectable()
 export class PhotoStorageService {
   private readonly root = process.env.UPLOAD_DIR ?? join(process.cwd(), 'data', 'uploads');
 
-  async saveKckPhoto(photo: UploadedPhoto): Promise<StoredPhoto> {
+  async save(photo: UploadedPhoto, folder: PhotoFolder): Promise<StoredPhoto> {
     this.validate(photo);
-    const dir = join(this.root, 'kck');
-    await mkdir(dir, { recursive: true });
+    await mkdir(join(this.root, folder), { recursive: true });
 
-    const extension = this.extension(photo);
-    const storageKey = `kck/${randomUUID()}${extension}`;
+    const storageKey = `${folder}/${randomUUID()}${this.extension(photo)}`;
     await writeFile(join(this.root, storageKey), photo.buffer, { flag: 'wx' });
 
     return {
@@ -26,11 +34,24 @@ export class PhotoStorageService {
     };
   }
 
-  async read(photo: StoredPhoto): Promise<Buffer> {
+  async read(storageKey: string): Promise<Buffer> {
+    this.checkKey(storageKey);
     try {
-      return await readFile(join(this.root, photo.storageKey));
+      return await readFile(join(this.root, storageKey));
     } catch {
-      throw new NotFoundException('Zdjęcie zgłoszenia nie istnieje w magazynie SideQuest.');
+      throw new NotFoundException('Zdjęcie nie istnieje w magazynie SideQuest.');
+    }
+  }
+
+  mimeTypeOf(storageKey: string): string {
+    const ext = extname(storageKey).toLowerCase();
+    return Object.entries(BY_MIME).find(([, e]) => e === ext)?.[0] ?? 'application/octet-stream';
+  }
+
+  // Klucz przychodzi z adresu URL, więc nie wpuszczamy „..” ani innych folderów.
+  private checkKey(storageKey: string): void {
+    if (!/^(kck|initiatives)\/[0-9a-f-]{36}\.[a-z0-9]{1,5}$/i.test(storageKey)) {
+      throw new NotFoundException('Nieprawidłowy klucz zdjęcia.');
     }
   }
 
@@ -45,13 +66,6 @@ export class PhotoStorageService {
   private extension(photo: UploadedPhoto): string {
     const fromName = extname(photo.originalname ?? '').toLowerCase();
     if (/^\.[a-z0-9]{1,5}$/.test(fromName)) return fromName;
-    const byMime: Record<string, string> = {
-      'image/jpeg': '.jpg',
-      'image/png': '.png',
-      'image/webp': '.webp',
-      'image/heic': '.heic',
-      'image/heif': '.heif',
-    };
-    return byMime[photo.mimetype] ?? '.img';
+    return BY_MIME[photo.mimetype] ?? '.img';
   }
 }

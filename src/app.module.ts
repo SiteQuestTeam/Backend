@@ -6,11 +6,17 @@ import { PlayersModule } from './players/players.module';
 import { InitiativesModule } from './initiatives/initiatives.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { KckModule } from './kck/kck.module';
+import { PointsModule } from './points/points.module';
+import { AddressModule } from './address/address.module';
+import { StorageModule } from './storage/storage.module';
 import { TestPageController } from './test-page/test-page.controller';
 
 @Module({
   imports: [
     PrismaModule,
+    PointsModule,
+    AddressModule,
+    StorageModule,
     HealthModule,
     AiModule,
     PlayersModule,

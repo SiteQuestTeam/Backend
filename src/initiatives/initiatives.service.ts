@@ -11,6 +11,8 @@ import {
   VOTING_RADIUS_METERS,
   distanceMeters,
 } from '../common/domain';
+import { AddressService } from '../address/address.service';
+import { PointsService } from '../points/points.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlayersService } from '../players/players.service';
 
@@ -45,6 +47,8 @@ export class InitiativesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly players: PlayersService,
+    private readonly points: PointsService,
+    private readonly address: AddressService,
   ) {}
 
   async list(
@@ -113,26 +117,22 @@ export class InitiativesService {
       'whyImportant',
       1000,
     );
-    const people = this.requiredText(
-      input.resources?.people,
-      'resources.people',
-      500,
-    );
-    const equipment = this.requiredText(
-      input.resources?.equipment,
-      'resources.equipment',
-      500,
-    );
-    const transport = this.requiredText(
-      input.resources?.transport,
-      'resources.transport',
-      500,
-    );
-    const fixer = this.requiredText(input.fixer, 'fixer', 30);
-    if (!['Miasto', 'Gildia', 'Gracze'].includes(fixer)) {
-      throw new BadRequestException('fixer must be Miasto, Gildia or Gracze.');
+    // Pole może być puste, np. gdy transport nie jest potrzebny.
+    const people = this.optionalText(input.resources?.people, 'resources.people', 500);
+    const equipment = this.optionalText(input.resources?.equipment, 'resources.equipment', 500);
+    const transport = this.optionalText(input.resources?.transport, 'resources.transport', 500);
+    if (!people && !equipment && !transport) {
+      throw new BadRequestException('resources needs at least one field.');
     }
-    const place = this.requiredText(input.place, 'place', 200);
+    // Gildia jest tylko w pitchu.
+    const fixer = this.requiredText(input.fixer, 'fixer', 30);
+    if (!['Miasto', 'Gracze'].includes(fixer)) {
+      throw new BadRequestException('fixer must be Miasto or Gracze.');
+    }
+    // Miejsce: gdy aplikacja go nie poda, bierzemy adres z GPS.
+    const place =
+      this.optionalText(input.place, 'place', 200) ||
+      (await this.placeFromGps(latitude, longitude));
 
     const created = await this.prisma.$transaction(async (tx) => {
       const initiative = await tx.initiative.create({
@@ -156,21 +156,13 @@ export class InitiativesService {
         },
       });
 
-      await tx.player.update({
-        where: { id: playerId },
-        data: {
-          pointsBalance: { increment: POINTS.initiativeCreated },
-          totalPointsEarned: { increment: POINTS.initiativeCreated },
-        },
-      });
-      await tx.pointTransaction.create({
-        data: {
-          playerId,
-          amount: POINTS.initiativeCreated,
-          type: 'INITIATIVE_CREATED',
-          reference: initiative.id,
-        },
-      });
+      await this.points.award(
+        playerId,
+        POINTS.initiativeCreated,
+        'INITIATIVE_CREATED',
+        initiative.id,
+        tx,
+      );
 
       return initiative;
     });
@@ -239,30 +231,27 @@ export class InitiativesService {
           status: passed ? 'passed' : 'collecting',
         },
       });
-      await tx.player.update({
-        where: { id: playerId },
-        data: {
-          pointsBalance: { increment: awarded },
-          totalPointsEarned: { increment: awarded },
-        },
-      });
-      await tx.pointTransaction.create({
-        data: {
-          playerId,
-          amount: POINTS.voteCast,
-          type: 'VOTE_CAST',
-          reference: id,
-        },
-      });
+      await this.points.award(playerId, POINTS.voteCast, 'VOTE_CAST', id, tx);
+
+      // Próg: bonus dla Inicjatora i każdego, kto oddał Głos (także tego ostatniego).
       if (passed) {
-        await tx.pointTransaction.create({
-          data: {
-            playerId,
-            amount: POINTS.initiativePassedBonus,
-            type: 'INITIATIVE_PASSED_BONUS',
-            reference: id,
-          },
+        const voters = await tx.vote.findMany({
+          where: { initiativeId: id },
+          select: { playerId: true },
         });
+        const winners = new Set([
+          initiative.initiatorId,
+          ...voters.map((vote) => vote.playerId),
+        ]);
+        for (const winner of winners) {
+          await this.points.award(
+            winner,
+            POINTS.initiativePassedBonus,
+            'INITIATIVE_PASSED_BONUS',
+            id,
+            tx,
+          );
+        }
       }
 
       return { distanceM, passed, awarded };
@@ -347,6 +336,22 @@ export class InitiativesService {
         photoUri: initiative.photoUri ?? undefined,
       },
     };
+  }
+
+  private async placeFromGps(latitude: number, longitude: number) {
+    const address = await this.address.fromGps(latitude, longitude);
+    const text = [address?.streetName, address?.buildingNumber]
+      .filter(Boolean)
+      .join(' ');
+    return text || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+  }
+
+  private optionalText(value: string | undefined, field: string, max: number) {
+    const normalized = value?.trim() ?? '';
+    if (normalized.length > max) {
+      throw new BadRequestException(field + ' is too long.');
+    }
+    return normalized;
   }
 
   private requiredText(value: string | undefined, field: string, max = 100) {
