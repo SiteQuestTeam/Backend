@@ -55,6 +55,11 @@ export class AdminController {
     return this.admin.listInitiatives();
   }
 
+  @Post('initiatives')
+  createInitiative(@Body() body: Record<string, unknown>) {
+    return this.admin.createInitiative(body as any);
+  }
+
   @Patch('initiatives/:id')
   updateInitiative(@Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.admin.updateInitiative(id, body as any);

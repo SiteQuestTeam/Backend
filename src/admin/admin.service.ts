@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlayersService } from '../players/players.service';
+import { CreateInitiativeInput, InitiativesService } from '../initiatives/initiatives.service';
 
 type RewardInput = {
   id?: string;
@@ -35,6 +36,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly players: PlayersService,
+    private readonly initiatives?: InitiativesService,
   ) {}
 
   async listPlayers() {
@@ -161,6 +163,11 @@ export class AdminService {
       throw new BadRequestException('Provide status or threshold.');
     }
     return this.prisma.initiative.update({ where: { id }, data });
+  }
+
+  createInitiative(input: CreateInitiativeInput) {
+    if (!this.initiatives) throw new Error('Initiatives service is unavailable.');
+    return this.initiatives.create(input);
   }
 
   listCityIncidents() {

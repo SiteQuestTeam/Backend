@@ -71,3 +71,11 @@ test('admin accepts only operational KCK statuses', async () => {
     { status: 400 },
   );
 });
+
+test('admin initiative creation delegates to the public domain workflow', async () => {
+  const input = { playerId: 'player-1', title: 'New initiative' };
+  const initiatives = { create: async (received: unknown) => ({ received }) };
+  const service = new AdminService({} as any, {} as any, initiatives as any);
+
+  assert.deepEqual(await service.createInitiative(input as any), { received: input });
+});

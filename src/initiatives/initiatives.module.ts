@@ -7,5 +7,6 @@ import { InitiativesService } from './initiatives.service';
   imports: [PlayersModule],
   controllers: [InitiativesController],
   providers: [InitiativesService],
+  exports: [InitiativesService],
 })
 export class InitiativesModule {}
