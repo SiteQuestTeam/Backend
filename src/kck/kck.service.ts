@@ -16,7 +16,7 @@ import { PointsService } from '../points/points.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PhotoStorageService } from '../storage/photo-storage.service';
 import { KCK_CATEGORY_IDS } from './kck.constants';
-import { KckAmbiguousError, KckClient, KckHttpError } from './kck.client';
+import { KckAmbiguousError, KckClient, KckConfigurationError, KckHttpError } from './kck.client';
 import { submittedKckResponse } from './kck-response';
 import {
   CityIncidentStatus,
@@ -130,7 +130,6 @@ export class KckService {
           photoUrl: this.photoUrl(incident.id),
           pointsGranted: 0,
           pointsGrantedAt: incident.pointsGrantedAt,
-          mock: !this.client.live,
         });
       }
       throw new ConflictException('Ta Usterka została już wysłana.');
@@ -188,6 +187,10 @@ export class KckService {
         fileName: incident.photoName,
       });
     } catch (error) {
+      if (error instanceof KckConfigurationError) {
+        await this.setStatus(incident.id, 'FAILED', error.message);
+        throw new ServiceUnavailableException(error.message);
+      }
       if (error instanceof KckAmbiguousError) {
         await this.setStatus(incident.id, 'UNCERTAIN', error.message);
         throw new ServiceUnavailableException(error.message);
@@ -243,7 +246,6 @@ export class KckService {
       photoUrl: this.photoUrl(incident.id),
       pointsGranted: submitted.pointsGranted,
       pointsGrantedAt: submitted.record.pointsGrantedAt,
-      mock: !this.client.live,
     });
   }
 

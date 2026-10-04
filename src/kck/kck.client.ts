@@ -12,15 +12,17 @@ export class KckHttpError extends Error {
 }
 
 export class KckAmbiguousError extends Error {}
+export class KckConfigurationError extends Error {}
 
 @Injectable()
 export class KckClient {
-  // Domyślnie mock: testy i próby demo nie wysyłają prawdziwych zgłoszeń do Miasta.
-  // Prawdziwe KCK tylko przy KCK_MODE=live.
+  // Wysyłka jest możliwa wyłącznie przy jawnie włączonej integracji z KCK.
   readonly live = process.env.KCK_MODE === 'live';
 
   async submitIncident(dto: KckIncidentDto, photo: { buffer: Buffer; mimeType: string; fileName: string }): Promise<string> {
-    if (!this.live) return `MOCK-${Date.now()}`;
+    if (!this.live) {
+      throw new KckConfigurationError('Integracja KCK nie jest włączona. Ustaw KCK_MODE=live.');
+    }
 
     const form = new FormData();
     form.append('dto', JSON.stringify(dto));

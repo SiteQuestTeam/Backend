@@ -9,7 +9,6 @@ test('returns the complete submit contract for a previously submitted incident',
       photoUrl: '/kck/incidents/draft-1/photo',
       pointsGranted: 0,
       pointsGrantedAt: new Date('2026-10-04T10:00:00.000Z'),
-      mock: true,
     }),
     {
       status: 'SUBMITTED',
@@ -17,7 +16,6 @@ test('returns the complete submit contract for a previously submitted incident',
       photoUrl: '/kck/incidents/draft-1/photo',
       pointsGranted: 0,
       pointsGrantedAt: new Date('2026-10-04T10:00:00.000Z'),
-      mock: true,
     },
   );
 });
