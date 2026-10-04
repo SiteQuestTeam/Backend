@@ -14,7 +14,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PlayersService } from '../players/players.service';
 
-type CreateInitiativeInput = {
+export type CreateInitiativeInput = {
   playerId?: string;
   latitude?: number;
   longitude?: number;
@@ -34,7 +34,7 @@ type CreateInitiativeInput = {
   photoUri?: string;
 };
 
-type VoteInput = {
+export type VoteInput = {
   playerId?: string;
   latitude?: number;
   longitude?: number;
