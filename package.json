@@ -16,8 +16,7 @@
     "prisma:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:deploy": "prisma db push --skip-generate",
-    "db:seed": "node prisma/seed.cjs",
-    "db:setup": "npm run prisma:generate && npm run db:push && npm run db:seed",
+    "db:setup": "npm run prisma:generate && npm run db:push",
     "czat": "tsx scripts/czat.ts"
   },
   "dependencies": {
@@ -37,8 +36,5 @@
     "prettier": "^3.6.2",
     "tsx": "^4.23.15",
     "typescript": "^5.9.2"
-  },
-  "prisma": {
-    "seed": "node prisma/seed.cjs"
   }
 }
