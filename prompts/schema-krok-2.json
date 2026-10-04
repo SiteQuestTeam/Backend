@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "SideQuest, krok 2: odpowiedzi → Brief",
+  "title": "SideQuest, krok 2: odpowiedzi → Brief Inicjatywy",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -51,9 +51,6 @@
           "$ref": "#/$defs/brief_inicjatywy"
         },
         {
-          "$ref": "#/$defs/brief_usterki"
-        },
-        {
           "type": "null"
         }
       ]
@@ -67,41 +64,6 @@
         "ai"
       ],
       "description": "ai = Gracz napisał „nie wiem”, a tekst zaproponowało AI. Aplikacja oznacza go ✨."
-    },
-    "brief_usterki": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "type",
-        "summary",
-        "category",
-        "description"
-      ],
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "usterka"
-        },
-        "summary": {
-          "type": "string",
-          "description": "Tytuł do 60 znaków, pole summary w KCK."
-        },
-        "category": {
-          "type": "string",
-          "enum": [
-            "DAMAGE",
-            "POLLUTION",
-            "GREENERY",
-            "ANIMALS",
-            "OTHER"
-          ],
-          "description": "Kategoria KCK. Na serviceExternalId zamienia ją backend."
-        },
-        "description": {
-          "type": "string",
-          "description": "1–3 zdania, najwyżej 500 znaków, pole description w KCK."
-        }
-      }
     },
     "brief_inicjatywy": {
       "type": "object",

@@ -7,7 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { APIError } from 'openai';
-import { AiBlad, DaneKrok1, DaneKrok2, krok1, krok2, przygotujZdjecie } from './ai-core';
+import { AiBlad, DaneKck, DaneKrok1, DaneKrok2, kck, krok1, krok2, przygotujZdjecie } from './ai-core';
 
 interface Zadanie<D> {
   /** Zdjęcie jako base64 (z prefiksem data:image/...;base64, albo bez). */
@@ -27,6 +27,13 @@ export class AiController {
   async krok2(@Body() body: Zadanie<DaneKrok2>) {
     const zdjecie = await this.zdjecie(body);
     return this.bezpiecznie(() => krok2(zdjecie, body.dane));
+  }
+
+  /** Usterka: zdjęcie → pola KCK albo RETAKE. Moduł KCK może też wołać przygotujUsterkeKck bezpośrednio. */
+  @Post('kck')
+  async kck(@Body() body: Zadanie<DaneKck>) {
+    const zdjecie = await this.zdjecie(body);
+    return this.bezpiecznie(() => kck(zdjecie, body.dane));
   }
 
   private async zdjecie(body: Zadanie<unknown>): Promise<string> {

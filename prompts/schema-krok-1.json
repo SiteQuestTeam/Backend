@@ -6,6 +6,7 @@
   "required": [
     "status",
     "danger",
+    "danger_kind",
     "faces_in_background",
     "retake_reason",
     "message",
@@ -38,6 +39,21 @@
         }
       ],
       "description": "Jedno zdanie: jakie możliwe zagrożenie widać. null, gdy nic. Nie przerywa rozmowy, aplikacja pokazuje ostrzeżenie."
+    },
+    "danger_kind": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "energia",
+            "inne"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "energia = prąd (słup, przewody, latarnia, skrzynka); aplikacja pokazuje wtedy też numer 991. null, gdy danger jest null."
     },
     "faces_in_background": {
       "type": "boolean",
