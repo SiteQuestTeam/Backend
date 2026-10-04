@@ -178,10 +178,18 @@ interface Zadanie {
   nazwa: string;
   prompt: string;
   schemat: string;
+  /** Limit czasu w ms. Brak = OPENAI_TIMEOUT_MS (domyślnie 8 s). */
+  limitMs?: number;
 }
 
 const KROK_1: Zadanie = { nazwa: 'krok_1', prompt: 'prompt-1.md', schemat: 'schema-krok-1.json' };
-const KROK_2: Zadanie = { nazwa: 'krok_2', prompt: 'prompt-2.md', schemat: 'schema-krok-2.json' };
+// Pisanie Briefu trwa ok. 8 s, więc przy limicie 8 s często nie zdążało. Ten krok ma 15 s.
+const KROK_2: Zadanie = {
+  nazwa: 'krok_2',
+  prompt: 'prompt-2.md',
+  schemat: 'schema-krok-2.json',
+  limitMs: Number(process.env.OPENAI_TIMEOUT_KROK_2_MS ?? 15000),
+};
 const KCK: Zadanie = { nazwa: 'kck', prompt: 'prompt-kck.md', schemat: 'schema-kck.json' };
 
 async function wywolaj<T>(zadanie: Zadanie, zdjecieBase64: string, dane: object, sprawdz: (wynik: T) => string[]): Promise<OdpowiedzAi<T>> {
@@ -209,7 +217,7 @@ async function wywolaj<T>(zadanie: Zadanie, zdjecieBase64: string, dane: object,
       },
     },
     // Krótki, przewidywalny czas: bez automatycznych ponowień SDK. Ponowienie to decyzja aplikacji.
-    { timeout: Number(process.env.OPENAI_TIMEOUT_MS ?? 8000), maxRetries: 0 },
+    { timeout: zadanie.limitMs ?? Number(process.env.OPENAI_TIMEOUT_MS ?? 8000), maxRetries: 0 },
   );
 
   for (const element of response.output) {
