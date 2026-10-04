@@ -10,6 +10,7 @@ import { PointsModule } from './points/points.module';
 import { AddressModule } from './address/address.module';
 import { StorageModule } from './storage/storage.module';
 import { TestPageController } from './test-page/test-page.controller';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { TestPageController } from './test-page/test-page.controller';
     InitiativesModule,
     RewardsModule,
     KckModule,
+    AdminModule,
   ],
   controllers: [TestPageController],
 })
