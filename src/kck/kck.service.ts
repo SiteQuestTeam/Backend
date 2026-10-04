@@ -17,6 +17,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PhotoStorageService } from '../storage/photo-storage.service';
 import { KCK_CATEGORY_IDS } from './kck.constants';
 import { KckAmbiguousError, KckClient, KckHttpError } from './kck.client';
+import { submittedKckResponse } from './kck-response';
 import {
   CityIncidentStatus,
   IncidentAddress,
@@ -124,11 +125,13 @@ export class KckService {
 
     if (incident.status === 'SUBMITTED') {
       if (incident.submissionId === input.submissionId) {
-        return {
-          status: 'SUBMITTED',
+        return submittedKckResponse({
           incidentId: incident.kckIncidentId,
+          photoUrl: this.photoUrl(incident.id),
+          pointsGranted: 0,
           pointsGrantedAt: incident.pointsGrantedAt,
-        };
+          mock: !this.client.live,
+        });
       }
       throw new ConflictException('Ta Usterka została już wysłana.');
     }
@@ -235,14 +238,13 @@ export class KckService {
       };
     });
 
-    return {
-      status: 'SUBMITTED',
+    return submittedKckResponse({
       incidentId,
-      mock: !this.client.live,
       photoUrl: this.photoUrl(incident.id),
       pointsGranted: submitted.pointsGranted,
       pointsGrantedAt: submitted.record.pointsGrantedAt,
-    };
+      mock: !this.client.live,
+    });
   }
 
   // „To ta sama Usterka”: nic nie idzie do KCK, Gracz dostaje mniej Punktów niż za pierwsze zgłoszenie.
