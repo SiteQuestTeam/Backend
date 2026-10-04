@@ -128,10 +128,7 @@ export class KckService {
       );
     }
 
-    if (
-      incident.status === 'SUBMITTING' &&
-      incident.submissionId === input.submissionId
-    ) {
+    if (incident.status === 'SUBMITTING') {
       throw new ConflictException('To zgłoszenie jest już wysyłane.');
     }
 
