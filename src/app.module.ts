@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { PlayersModule } from './players/players.module';
 import { InitiativesModule } from './initiatives/initiatives.module';
 import { RewardsModule } from './rewards/rewards.module';
+import { KckModule } from './kck/kck.module';
 import { TestPageController } from './test-page/test-page.controller';
 
 @Module({
@@ -15,6 +16,7 @@ import { TestPageController } from './test-page/test-page.controller';
     PlayersModule,
     InitiativesModule,
     RewardsModule,
+    KckModule,
   ],
   controllers: [TestPageController],
 })

@@ -10,3 +10,4 @@ npm-debug.log*
 prisma/*.db
 prisma/*.db-journal
 logs/
+data/
