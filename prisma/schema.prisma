@@ -85,6 +85,7 @@ model RewardRedemption {
   player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
   reward    Reward   @relation(fields: [rewardId], references: [id], onDelete: Restrict)
 
+  @@unique([playerId, rewardId])
   @@index([playerId])
 }
 
