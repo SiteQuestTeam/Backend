@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SideQuest – test czatu AI</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --ink: #101828; --muted: #667085; --border: #e4e7ec;
+    --signal: #3b5bfd; --signal-soft: #eef1ff; --ai: #ffffff; --gracz: #3b5bfd; --alarm: #d92d20; --alarm-soft: #fef3f2;
+    --warn: #b54708; --warn-soft: #fffaeb; --ok-soft: #ecfdf3;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; flex-direction: column; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; }
+  header .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 720px; margin: 0 auto; }
+  header h1 { font-size: 16px; margin: 0; }
+  header small { color: var(--muted); }
+  header details { max-width: 720px; margin: 6px auto 0; font-size: 13px; color: var(--muted); }
+  header textarea { width: 100%; min-height: 70px; font: 12px ui-monospace, monospace; margin-top: 6px; }
+  #chat { flex: 1; overflow-y: auto; padding: 16px; }
+  #chat > * { max-width: 720px; margin-left: auto; margin-right: auto; }
+  .ekran { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 18px; margin-bottom: 6px; }
+  .msg { display: flex; margin: 6px auto; }
+  .msg > div { padding: 10px 14px; border-radius: 16px; max-width: 85%; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.ai > div { background: var(--ai); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .msg.gracz { justify-content: flex-end; }
+  .msg.gracz > div { background: var(--gracz); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.alarm > div { background: var(--alarm-soft); border: 1px solid var(--alarm); color: var(--alarm); font-weight: 600; }
+  .msg.blad > div { background: var(--alarm-soft); color: var(--alarm); }
+  .lekcja { background: var(--signal-soft); border-radius: 12px; padding: 8px 12px; margin-top: 8px; font-size: 13px; }
+  details.edu { background: var(--signal-soft); border-radius: 12px; padding: 8px 12px; margin-top: 8px; font-size: 13px; white-space: normal; }
+  details.edu summary { cursor: pointer; font-weight: 600; }
+  details.edu h4 { margin: 10px 0 4px; font-size: 13px; }
+  details.edu ul { margin: 0; padding-left: 18px; }
+  details.edu p { margin: 10px 0 0; }
+  .msg img { max-width: 240px; border-radius: 12px; display: block; }
+  .meta { font-size: 12px; color: var(--muted); margin: 2px auto 6px; }
+  .meta details { display: inline; }
+  .meta pre { white-space: pre-wrap; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 11px; overflow-x: auto; }
+  .ostrzezenie { font-size: 12px; color: var(--warn); background: var(--warn-soft); border-radius: 8px; padding: 4px 8px; margin: 4px auto; }
+  .myslenie > div { color: var(--muted); font-style: italic; }
+  .brief { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin: 8px auto; }
+  .brief h3 { margin: 0 0 8px; font-size: 15px; }
+  .brief dl { margin: 0; }
+  .brief dt { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 10px; }
+  .brief dd { margin: 2px 0 0; }
+  .ai-tag { background: var(--warn-soft); color: var(--warn); border-radius: 6px; padding: 0 5px; font-size: 12px; }
+  .kopia { width: 100%; min-height: 80px; font: inherit; margin-top: 8px; }
+  footer { background: var(--surface); border-top: 1px solid var(--border); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  #panel { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+  .przyciski, .chipy { display: flex; flex-wrap: wrap; gap: 8px; }
+  button, .plik { font: inherit; border: 1px solid var(--border); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 9px 16px; cursor: pointer; }
+  button.glowny, .plik { background: var(--signal); border-color: var(--signal); color: #fff; font-weight: 600; }
+  button.chip { background: var(--signal-soft); border-color: transparent; border-radius: 12px; text-align: left; }
+  button:disabled { opacity: .5; cursor: default; }
+  .wiersz { display: flex; gap: 8px; }
+  .wiersz input { flex: 1; font: inherit; padding: 10px 14px; border: 1px solid var(--border); border-radius: 999px; min-width: 0; }
+  .plik input { display: none; }
+  .podpis { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <div><h1>SideQuest – test czatu AI</h1><small>Narzędzie do testowania promptów. To nie jest aplikacja.</small></div>
+    <small id="kosztSesji">Koszt: $0.0000</small>
+  </div>
+  <details>
+    <summary>Zgłoszenia w pobliżu (do testu duplikatów)</summary>
+    <textarea id="wPoblizu" placeholder='[{"id": "u-104", "typ": "usterka", "tytul": "Dziury w jezdni przy krawężniku", "status": "oczekujace"}]'></textarea>
+  </details>
+</header>
+
+<main id="chat"></main>
+
+<footer><div id="panel"></div></footer>
+
+<script>
+// Stałe teksty z ai/stale-teksty.md w repo Project-context-.
+const TEKST = {
+  zagrozenie: (opis) => `⚠️ AI widzi możliwe zagrożenie: ${opis}\n\nCzy to naprawdę się dzieje?`,
+  zagrozenieTak: 'Odejdź od tego miejsca i zadzwoń pod 112. Tego nie zgłaszamy w SideQuest, bo tu potrzebne są służby ratunkowe.',
+  zagrozenieNie: 'Dzięki. Idziemy dalej.',
+  przechodnie: '👤 Na zdjęciu widać przechodniów. Są tylko szczegółem ulicy, więc zdjęcie może trafić na mapę. Prawo autorskie (art. 81 ust. 2 pkt 2) pozwala pokazać osobę, która jest tylko szczegółem większej całości, na przykład zgromadzenia albo krajobrazu.',
+  opiszZmiane: 'Nie widzę tu usterki. Napisz, co chcesz zmienić w tym miejscu.',
+  niezrozumiale: 'Nie rozumiem tej odpowiedzi. Napisz ją jeszcze raz, innymi słowami.',
+  dlaczegoPytam: {
+    dzialanie: 'Budżet Obywatelski prosi o szczegółowy opis. Konkret, na przykład „stojak na 6 rowerów”, ma większą szansę niż ogólnik.',
+    zasoby: 'W inicjatywie lokalnej miasto pyta, ile pracy dadzą sami mieszkańcy. Za tę pracę wniosek dostaje punkty.',
+  },
+  usterkaGotowa: [
+    'Po tym numerze sprawdzisz na kontakt.krakow.pl, co dzieje się ze sprawą. Ponad 80% zgłoszeń kończy się interwencją miasta.',
+    'Jedna dziura to Usterka. Ale jeśli cała ulica wymaga zmiany, na przykład nowego chodnika albo progu zwalniającego, możesz zgłosić Inicjatywę.',
+  ],
+  coDalejMiasto: 'Twój Brief ma format Budżetu Obywatelskiego. Gdy zbierze 10 Głosów, pokażemy, jak złożyć go w mieście.',
+  coDalejGracze: 'Tę zmianę możecie zrobić sami z sąsiadami. Gdy zbierze 10 Głosów, pokażemy, jak zacząć.',
+  // Karta „Co mogę zrobić z tym pomysłem?” (ai/stale-teksty.md, źródła: docs/research-ai-form.md 1a i 1b).
+  dwieDrogi: {
+    tytul: '🎓 Co mogę zrobić z tym pomysłem?',
+    bo: {
+      naglowek: 'Budżet Obywatelski: miasto robi to za swoje pieniądze.',
+      punkty: [
+        'Składasz projekt na budzet.krakow.pl. Potrzebne jest konto z numerem PESEL.',
+        'Do projektu dołączasz 15 podpisów mieszkańców, kosztorys i harmonogram.',
+        'Potem mieszkańcy głosują. Projekty, które wygrają, realizuje miasto.',
+        'Pasuje do większych zmian, na przykład nowego chodnika albo placu zabaw. W edycji 2026 do podziału jest 54 mln zł.',
+      ],
+    },
+    il: {
+      naglowek: 'Inicjatywa lokalna: robicie to razem z miastem.',
+      punkty: [
+        'Mieszkańcy dają własną pracę, na przykład sadzenie albo malowanie. Miasto pomaga, na przykład materiałami.',
+        'Nie ma głosowania. Miasto ocenia wniosek i daje punkty, między innymi za pracę mieszkańców i za pozytywną opinię Rady Dzielnicy.',
+        'Realizacja zaczyna się najwcześniej 8 tygodni po złożeniu wniosku.',
+        'Pasuje do mniejszych zmian, które sąsiedzi mogą zrobić sami z pomocą miasta.',
+      ],
+    },
+    wybor: 'Jak wybrać? Duża zmiana, którą ma zrobić miasto: Budżet Obywatelski. Chcecie zrobić coś sami, a miasto ma pomóc: inicjatywa lokalna.',
+  },
+};
+const ADRES = 'Kraków (adres z GPS)';
+const NUMER_TESTOWY = '888218';
+const KATEGORIE_KCK = { DAMAGE: 'Uszkodzenia', POLLUTION: 'Zanieczyszczenia i odory', GREENERY: 'Zieleń', ANIMALS: 'Zwierzęta', OTHER: 'Pozostałe' };
+
+const chat = document.getElementById('chat');
+const panel = document.getElementById('panel');
+let zdjecie = null;
+let kosztSesji = 0;
+
+// ---------- budowanie widoku (zawsze textContent, nigdy innerHTML z danymi AI) ----------
+function el(tag, klasa, tekst) {
+  const e = document.createElement(tag);
+  if (klasa) e.className = klasa;
+  if (tekst !== undefined) e.textContent = tekst;
+  return e;
+}
+function przewin() { chat.scrollTop = chat.scrollHeight; }
+function dodaj(e) { chat.append(e); przewin(); return e; }
+function ekran(nazwa) { dodaj(el('div', 'ekran', nazwa)); }
+function wiadomosc(kto, tekst, dodatek) {
+  const wrap = el('div', `msg ${kto}`);
+  const dymek = el('div', '', tekst);
+  if (dodatek) dymek.append(dodatek);
+  wrap.append(dymek);
+  return dodaj(wrap);
+}
+function lekcja(tekst) { return el('div', 'lekcja', `💡 ${tekst}`); }
+function kartaDwieDrogi() {
+  const d = TEKST.dwieDrogi;
+  const karta = el('details', 'edu');
+  karta.append(el('summary', '', d.tytul));
+  for (const droga of [d.bo, d.il]) {
+    const lista = el('ul');
+    for (const p of droga.punkty) lista.append(el('li', '', p));
+    karta.append(el('h4', '', droga.naglowek), lista);
+  }
+  karta.append(el('p', '', d.wybor));
+  return karta;
+}
+function wyczyscPanel() { panel.replaceChildren(); }
+
+// ---------- pytania do Gracza (każde zwraca Promise z odpowiedzią) ----------
+function przyciski(lista) {
+  return new Promise((resolve) => {
+    wyczyscPanel();
+    const rzad = el('div', 'przyciski');
+    for (const p of lista) {
+      const b = el('button', p.glowny ? 'glowny' : '', p.etykieta);
+      b.onclick = () => {
+        wyczyscPanel();
+        if (p.echo !== false) wiadomosc('gracz', p.etykieta);
+        resolve(p.wartosc ?? p.etykieta);
+      };
+      rzad.append(b);
+    }
+    panel.append(rzad);
+  });
+}
+
+function tekst({ podpis, podpowiedzi = [], wymagane = true, przycisk = 'Wyślij' }) {
+  return new Promise((resolve) => {
+    wyczyscPanel();
+    const wyslij = (wartosc) => {
+      const v = wartosc.trim();
+      if (!v && wymagane) return;
+      wyczyscPanel();
+      wiadomosc('gracz', v || '(pominięte)');
+      resolve(v);
+    };
+    if (podpis) panel.append(el('div', 'podpis', podpis));
+    if (podpowiedzi.length) {
+      const chipy = el('div', 'chipy');
+      for (const p of podpowiedzi) {
+        const b = el('button', 'chip', p);
+        b.onclick = () => wyslij(p);
+        chipy.append(b);
+      }
+      panel.append(chipy);
+    }
+    const wiersz = el('div', 'wiersz');
+    const input = el('input');
+    input.placeholder = podpowiedzi.length ? 'albo napisz własną odpowiedź…' : 'Napisz…';
+    input.onkeydown = (e) => { if (e.key === 'Enter') wyslij(input.value); };
+    const b = el('button', 'glowny', przycisk);
+    b.onclick = () => wyslij(input.value);
+    wiersz.append(input, b);
+    panel.append(wiersz);
+    input.focus();
+  });
+}
+
+// ---------- wywołanie backendu ----------
+async function ai(krok, dane) {
+  for (;;) {
+    const myslenie = wiadomosc('ai myslenie', krok === 1 ? 'AI ogląda zdjęcie…' : 'AI pisze Brief…');
+    wyczyscPanel();
+    try {
+      const odp = await fetch(`/ai/krok-${krok}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zdjecie, dane }),
+      });
+      const json = await odp.json();
+      myslenie.remove();
+      if (!odp.ok) throw new Error(json.message || `Błąd ${odp.status}`);
+      pokazKoszt(json, dane);
+      return json.wynik;
+    } catch (blad) {
+      myslenie.remove();
+      wiadomosc('blad', `Błąd: ${blad.message}`);
+      await przyciski([{ etykieta: 'Spróbuj jeszcze raz', glowny: true, echo: false }]);
+    }
+  }
+}
+
+function pokazKoszt({ wynik, ostrzezenia, koszt }, dane) {
+  kosztSesji += koszt.usd;
+  document.getElementById('kosztSesji').textContent = `Koszt: $${kosztSesji.toFixed(4)}`;
+  const meta = el('div', 'meta', `${koszt.model}: ${koszt.input_tokens} wej. (${koszt.cached_tokens} z cache), ${koszt.output_tokens} wyj. (${koszt.reasoning_tokens} myślenia), $${koszt.usd.toFixed(4)} · `);
+  const det = el('details');
+  det.append(el('summary', '', 'JSON'), el('pre', '', JSON.stringify({ wyslane: dane, wynik }, null, 2)));
+  meta.append(det);
+  dodaj(meta);
+  for (const o of ostrzezenia) dodaj(el('div', 'ostrzezenie', `⚠️ ${o}`));
+}
+
+// ---------- zdjęcie ----------
+async function zmniejsz(plik) {
+  const url = URL.createObjectURL(plik);
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const skala = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.naturalWidth * skala);
+  c.height = Math.round(img.naturalHeight * skala);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  URL.revokeObjectURL(url);
+  return c.toDataURL('image/jpeg', 0.85);
+}
+
+function wybierzZdjecie() {
+  return new Promise((resolve) => {
+    wyczyscPanel();
+    const label = el('label', 'plik', '📷 Zrób albo wybierz zdjęcie');
+    const input = el('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.onchange = async () => {
+      if (!input.files[0]) return;
+      const dataUrl = await zmniejsz(input.files[0]);
+      wyczyscPanel();
+      const img = el('img');
+      img.src = dataUrl;
+      wiadomosc('gracz', '', img);
+      resolve(dataUrl);
+    };
+    label.append(input);
+    panel.append(label);
+  });
+}
+
+function wPoblizu() {
+  const surowe = document.getElementById('wPoblizu').value.trim();
+  if (!surowe) return [];
+  try { return JSON.parse(surowe); } catch { alert('Pole „Zgłoszenia w pobliżu” to nie jest poprawny JSON. Pomijam je.'); return []; }
+}
+
+// ---------- przebieg rozmowy (jak w scripts/czat.ts) ----------
+async function start() {
+  chat.replaceChildren();
+  ekran('Ekran 1: aparat');
+  wiadomosc('ai', 'Zrób zdjęcie miejsca, które chcesz zgłosić.');
+  zdjecie = await wybierzZdjecie();
+  const linia = await tekst({ podpis: 'Co chcesz zgłosić? (opcjonalnie)', wymagane: false, przycisk: 'Dalej' });
+  await przebieg(linia);
+  await przyciski([{ etykieta: 'Zacznij od nowa', glowny: true, echo: false }]);
+  start();
+}
+
+async function przebieg(linia) {
+  const listaWPoblizu = wPoblizu();
+  const dane1 = { linia_gracza: linia, adres: ADRES, dzielnica: 'nieznana', zgloszenia_w_poblizu: listaWPoblizu, ostatnie_briefy_gracza: [] };
+
+  let w1;
+  for (;;) {
+    w1 = await ai(1, dane1);
+    // Zagrożenie nie przerywa rozmowy. Gracz sam ocenia sytuację na miejscu.
+    if (w1.danger) {
+      ekran('Możliwe zagrożenie');
+      wiadomosc('alarm', TEKST.zagrozenie(w1.danger));
+      // AI może się pomylić, więc pytamy Gracza. Potwierdzenie kończy rozmowę, zaprzeczenie pozwala iść dalej.
+      const tak = await przyciski([{ etykieta: 'Tak, widzę to', wartosc: true }, { etykieta: 'Nie, nic takiego tu nie ma', wartosc: false, glowny: true }]);
+      wiadomosc(tak ? 'alarm' : 'ai', tak ? TEKST.zagrozenieTak : TEKST.zagrozenieNie);
+      if (tak) return;
+    }
+    if (w1.status === 'ok' && w1.faces_in_background) wiadomosc('ai', TEKST.przechodnie);
+    if (w1.status === 'ok') break;
+    if (w1.status === 'nowe_zdjecie') {
+      ekran(`Nowe zdjęcie: ${w1.retake_reason}`);
+      wiadomosc('ai', w1.message);
+      return;
+    }
+    if (w1.status === 'nie_widac_usterki') {
+      ekran('Nie widać usterki');
+      wiadomosc('ai', w1.message);
+      const wybor = await przyciski([{ etykieta: '📷 Zrób nowe zdjęcie', wartosc: 'foto' }, { etykieta: '✏️ Popraw opis', wartosc: 'opis', glowny: true }]);
+      if (wybor === 'foto') return;
+    } else {
+      ekran(w1.status === 'opisz_zmiane' ? 'Co chcesz zmienić?' : 'Nie rozumiem');
+      wiadomosc('ai', w1.status === 'opisz_zmiane' ? TEKST.opiszZmiane : TEKST.niezrozumiale);
+    }
+    dane1.linia_gracza = await tekst({});
+  }
+
+  if (w1.duplicate_of) {
+    const dup = listaWPoblizu.find((z) => z.id === w1.duplicate_of);
+    ekran('Duplikat');
+    wiadomosc('ai', `To chyba to samo co „${dup ? dup.tytul : w1.duplicate_of}”. Chodzi o to samo?`);
+    const tak = await przyciski([{ etykieta: 'Tak', wartosc: true, glowny: true }, { etykieta: 'Nie, to co innego', wartosc: false }]);
+    if (tak) {
+      if (dup && dup.typ === 'inicjatywa' && dup.status !== 'przeszla') wiadomosc('ai', 'Ta Inicjatywa już jest na mapie. Poprzyj ją Głosem. [ Oddaj Głos ]');
+      else if (dup && dup.typ === 'inicjatywa') wiadomosc('ai', 'Ta Inicjatywa już przeszła. +? Punktów za Zainteresowanie.');
+      else wiadomosc('ai', 'Dzięki. Twoje Zainteresowanie jest zapisane. +? Punktów. Znajdziesz to w Historii.');
+      return;
+    }
+  }
+
+  ekran('Typ zgłoszenia');
+  let typ = w1.type || 'inicjatywa';
+  if (w1.type_locked) {
+    wiadomosc('ai', `${w1.type_reason}\n\n→ ${typ === 'usterka' ? 'Usterka' : 'Inicjatywa'}`);
+    await przyciski([{ etykieta: 'Dalej', glowny: true, echo: false }]);
+  } else {
+    wiadomosc('ai', `Wygląda na ${typ === 'usterka' ? 'Usterkę' : 'Inicjatywę'}.\n${w1.type_reason}`);
+    typ = await przyciski([
+      { etykieta: '← Usterka', wartosc: 'usterka', glowny: typ === 'usterka' },
+      { etykieta: 'Inicjatywa →', wartosc: 'inicjatywa', glowny: typ === 'inicjatywa' },
+    ]);
+  }
+
+  const odpowiedzi = [];
+  if (typ === 'inicjatywa') {
+    for (const [i, p] of w1.questions.entries()) {
+      ekran(`Pytanie ${i + 1} z ${w1.questions.length}`);
+      wiadomosc('ai', p.question, lekcja(`Dlaczego pytam: ${TEKST.dlaczegoPytam[p.topic]}`));
+      odpowiedzi.push({ temat: p.topic, pytanie: p.question, odpowiedz: await tekst({ podpowiedzi: p.suggestions }) });
+    }
+    if (!w1.questions.length) dodaj(el('div', 'ostrzezenie', '⚠️ AI nie dało pytań, a typ to Inicjatywa. Brief powstanie bez odpowiedzi.'));
+  }
+
+  const dane2 = {
+    typ,
+    kategoria: typ === w1.type ? w1.category : null,
+    linia_gracza: dane1.linia_gracza,
+    odpowiedzi,
+    pytanie_zwrotne_juz_zadane: false,
+    odpowiedz_na_pytanie_zwrotne: '',
+    adres: ADRES,
+    dzielnica: 'nieznana',
+  };
+  for (;;) {
+    const w2 = await ai(2, dane2);
+    if (w2.status === 'niezrozumiale' && w2.unclear_topic) {
+      const o = odpowiedzi.find((x) => x.temat === w2.unclear_topic);
+      ekran('Nie rozumiem');
+      wiadomosc('ai', o ? `${TEKST.niezrozumiale}\n\n${o.pytanie}` : TEKST.niezrozumiale);
+      if (o) o.odpowiedz = await tekst({});
+      continue;
+    }
+    if (w2.status === 'pytanie_zwrotne') {
+      ekran('Pytanie zwrotne');
+      wiadomosc('ai', w2.follow_up);
+      dane2.odpowiedz_na_pytanie_zwrotne = await tekst({});
+      dane2.pytanie_zwrotne_juz_zadane = true;
+      continue;
+    }
+    if (w2.brief) await pokazBrief(w2.brief);
+    return;
+  }
+}
+
+async function pokazBrief(b) {
+  const karta = el('div', 'brief');
+  const dl = el('dl');
+  const pole = (nazwa, wartosc, zrodlo) => {
+    const dd = el('dd');
+    if (zrodlo === 'ai') dd.append(el('span', 'ai-tag', '✨ propozycja AI'), ' ');
+    dd.append(wartosc);
+    dl.append(el('dt', '', nazwa), dd);
+  };
+  if (b.type === 'inicjatywa') {
+    ekran('Brief Inicjatywy');
+    karta.append(el('h3', '', 'Sprawdź swój Brief.'));
+    pole('Tytuł', b.title);
+    pole('Kategoria', b.category);
+    pole('Problem', b.problem);
+    pole('Proponowane działanie', b.proposed_action.text, b.proposed_action.source);
+    pole('Dlaczego to ważne', b.why_it_matters);
+    pole('Potrzebne zasoby', b.resources.text, b.resources.source);
+    const kto = b.who_fixes.city_needed ? 'Miasto' : 'Gracze';
+    pole('Kto naprawi', `${kto} (pewność: ${b.who_fixes.confidence})\n${b.who_fixes.reason}`);
+    pole('Miejsce', ADRES);
+  } else {
+    ekran('Zgłoszenie Usterki do KCK');
+    karta.append(el('h3', '', 'Sprawdź, czy dane są poprawne.'));
+    pole('Tytuł', b.summary);
+    pole('Kategoria KCK', `${b.category} (${KATEGORIE_KCK[b.category] ?? '?'})`);
+    pole('Opis', b.description);
+    pole('Miejsce', ADRES);
+  }
+  karta.append(dl);
+  dodaj(karta);
+
+  await przyciski([{ etykieta: b.type === 'usterka' ? 'Wyślij do KCK' : 'Opublikuj', glowny: true }]);
+
+  ekran('Gotowe');
+  if (b.type === 'usterka') {
+    // Na stronie testowej nic nie idzie do KCK. Prawdziwą wysyłkę robi moduł KCK (POST /kck/submit).
+    const tresc = el('div');
+    tresc.append(
+      el('div', '', `✓ Zgłoszenie przekazane do KCK. Numer zgłoszenia: ${NUMER_TESTOWY}.`),
+      el('div', 'podpis', '(test: nic nie zostało wysłane do KCK, numer jest przykładowy)'),
+      ...TEKST.usterkaGotowa.map(lekcja),
+    );
+    wiadomosc('ai', '', tresc);
+  } else {
+    const tekstCoDalej = b.who_fixes.city_needed ? TEKST.coDalejMiasto : TEKST.coDalejGracze;
+    const tresc = el('div');
+    tresc.append(lekcja(`🏛️ Co dalej w mieście: ${tekstCoDalej}`), kartaDwieDrogi());
+    wiadomosc('ai', '✅ Inicjatywa jest na mapie. Status: Zbiera głosy 0/10.', tresc);
+  }
+}
+
+start();
+</script>
+</body>
+</html>
