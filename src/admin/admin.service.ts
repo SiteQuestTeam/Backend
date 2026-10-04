@@ -17,6 +17,19 @@ type RewardInput = {
   active?: boolean;
 };
 
+type InitiativeInput = {
+  status?: string;
+  threshold?: number;
+};
+
+type CityIncidentInput = {
+  status?: string;
+  category?: string | null;
+  summary?: string | null;
+  description?: string | null;
+  lastError?: string | null;
+};
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -126,6 +139,64 @@ export class AdminService {
     await this.prisma.reward.delete({ where: { id } });
   }
 
+  listInitiatives() {
+    return this.prisma.initiative.findMany({
+      include: { initiator: { select: { id: true, nickname: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async updateInitiative(id: string, input: InitiativeInput) {
+    const initiative = await this.prisma.initiative.findUnique({ where: { id } });
+    if (!initiative) throw new NotFoundException('Initiative not found.');
+    const data = {
+      ...(input.status === undefined
+        ? {}
+        : { status: this.initiativeStatus(input.status) }),
+      ...(input.threshold === undefined
+        ? {}
+        : { threshold: this.threshold(input.threshold, initiative.votesCount) }),
+    };
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('Provide status or threshold.');
+    }
+    return this.prisma.initiative.update({ where: { id }, data });
+  }
+
+  listCityIncidents() {
+    return this.prisma.cityIncident.findMany({
+      include: { player: { select: { id: true, nickname: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async updateCityIncident(id: string, input: CityIncidentInput) {
+    const data = {
+      ...(input.status === undefined ? {} : { status: this.cityIncidentStatus(input.status) }),
+      ...(input.category === undefined
+        ? {}
+        : { category: this.optionalAdminText(input.category, 'category', 60) }),
+      ...(input.summary === undefined
+        ? {}
+        : { summary: this.optionalAdminText(input.summary, 'summary', 60) }),
+      ...(input.description === undefined
+        ? {}
+        : { description: this.optionalAdminText(input.description, 'description', 500) }),
+      ...(input.lastError === undefined
+        ? {}
+        : { lastError: this.optionalAdminText(input.lastError, 'lastError', 500) }),
+    };
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('Provide at least one editable field.');
+    }
+    try {
+      return await this.prisma.cityIncident.update({ where: { id }, data });
+    } catch (error) {
+      if (this.isMissingRecord(error)) throw new NotFoundException('City incident not found.');
+      throw error;
+    }
+  }
+
   private nickname(value: string) {
     const normalized = value?.trim() ?? '';
     if (normalized.length < 2 || normalized.length > 32) {
@@ -147,5 +218,43 @@ export class AdminService {
       throw new BadRequestException('points must be a positive integer.');
     }
     return value;
+  }
+
+  private threshold(value: number, votesCount: number) {
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new BadRequestException('threshold must be a positive integer.');
+    }
+    if (value < votesCount) {
+      throw new BadRequestException('threshold cannot be lower than the existing vote count.');
+    }
+    return value;
+  }
+
+  private initiativeStatus(value: string) {
+    if (!['collecting', 'passed'].includes(value)) {
+      throw new BadRequestException('Initiative status must be collecting or passed.');
+    }
+    return value;
+  }
+
+  private cityIncidentStatus(value: string) {
+    if (!['PREPARED', 'FAILED', 'UNCERTAIN', 'SUBMITTING', 'SUBMITTED', 'INTEREST'].includes(value)) {
+      throw new BadRequestException('Invalid city incident status.');
+    }
+    return value;
+  }
+
+  private optionalAdminText(value: string | null, field: string, maximum: number) {
+    if (value === null) return null;
+    if (typeof value !== 'string' || value.trim().length > maximum) {
+      throw new BadRequestException(`${field} must contain at most ${maximum} characters.`);
+    }
+    return value.trim() || null;
+  }
+
+  private isMissingRecord(error: unknown) {
+    return Boolean(
+      error && typeof error === 'object' && 'code' in error && error.code === 'P2025',
+    );
   }
 }

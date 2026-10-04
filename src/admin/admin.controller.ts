@@ -49,4 +49,24 @@ export class AdminController {
   deleteReward(@Param('id') id: string) {
     return this.admin.deleteReward(id);
   }
+
+  @Get('initiatives')
+  listInitiatives() {
+    return this.admin.listInitiatives();
+  }
+
+  @Patch('initiatives/:id')
+  updateInitiative(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.admin.updateInitiative(id, body as any);
+  }
+
+  @Get('city-incidents')
+  listCityIncidents() {
+    return this.admin.listCityIncidents();
+  }
+
+  @Patch('city-incidents/:id')
+  updateCityIncident(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.admin.updateCityIncident(id, body as any);
+  }
 }

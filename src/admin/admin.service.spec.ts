@@ -45,3 +45,29 @@ test('cannot delete a reward after somebody redeemed it', async () => {
 
   await assert.rejects(() => service.deleteReward('coffee'), { status: 409 });
 });
+
+test('admin may mark an initiative as passed without changing its votes', async () => {
+  const calls: unknown[] = [];
+  const prisma = {
+    initiative: {
+      findUnique: async () => ({ id: 'initiative-1', votesCount: 4 }),
+      update: async (args: unknown) => calls.push(args),
+    },
+  };
+  const service = new AdminService(prisma as any, {} as any);
+
+  await service.updateInitiative('initiative-1', { status: 'passed' });
+
+  assert.deepEqual(calls, [
+    { where: { id: 'initiative-1' }, data: { status: 'passed' } },
+  ]);
+});
+
+test('admin accepts only operational KCK statuses', async () => {
+  const service = new AdminService({} as any, {} as any);
+
+  await assert.rejects(
+    () => service.updateCityIncident('incident-1', { status: 'invented' }),
+    { status: 400 },
+  );
+});
