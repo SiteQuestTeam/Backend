@@ -238,7 +238,7 @@ export class AdminService {
   }
 
   private cityIncidentStatus(value: string) {
-    if (!['PREPARED', 'FAILED', 'UNCERTAIN', 'SUBMITTING', 'SUBMITTED', 'INTEREST'].includes(value)) {
+    if (!['PREPARED', 'FAILED', 'UNCERTAIN'].includes(value)) {
       throw new BadRequestException('Invalid city incident status.');
     }
     return value;
