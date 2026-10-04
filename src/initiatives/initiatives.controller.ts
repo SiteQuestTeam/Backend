@@ -1,5 +1,9 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { InitiativesService } from './initiatives.service';
+import {
+  CreateInitiativeInput,
+  InitiativesService,
+  VoteInput,
+} from './initiatives.service';
 
 @Controller('initiatives')
 export class InitiativesController {
@@ -34,14 +38,14 @@ export class InitiativesController {
   }
 
   @Post()
-  create(@Body() body: Parameters<InitiativesService['create']>[0]) {
+  create(@Body() body: CreateInitiativeInput) {
     return this.initiatives.create(body);
   }
 
   @Post(':id/votes')
   vote(
     @Param('id') id: string,
-    @Body() body: Parameters<InitiativesService['vote']>[1],
+    @Body() body: VoteInput,
   ) {
     return this.initiatives.vote(id, body);
   }
