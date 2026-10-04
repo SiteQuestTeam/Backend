@@ -38,11 +38,14 @@ Build the backend image locally:
 docker build -t sidequest-backend .
 ```
 
-Run it:
+Run it with a writable persistent volume:
 
 ```bash
-docker run --rm -p 3000:3000 sidequest-backend
+docker volume create sidequest-data
+docker run --rm -p 3000:3000 -v sidequest-data:/app/data sidequest-backend
 ```
+
+At container start, `prisma db push` initializes `/app/data/dev.db` when it is empty and preserves it on every later start. It never runs the seed script. Set `DATABASE_URL=file:/app/data/dev.db` in ResourcePortal; the mounted `/app/data` volume must be writable by the `node` user (UID 1000).
 
 Then verify:
 
@@ -63,6 +66,8 @@ The workflow publishes `latest` for `main` and an immutable `sha-...` tag for ea
 - `npm run start:dev` — start in watch mode
 - `npm run build` — build the application
 - `npm run start:prod` — run the built application
+- `npm run start:prod:docker` — initialize the mounted schema, then run the API
+- `npm run db:deploy` — apply the Prisma schema without seeding or resetting data
 - `npm run typecheck` — run TypeScript checks
 - `npm run format` — format TypeScript source files
 
