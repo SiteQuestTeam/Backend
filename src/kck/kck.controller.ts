@@ -12,36 +12,59 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { memoryStorage } from 'multer';
 import { KategoriaKck } from '../ai/ai-core';
 import { KckService } from './kck.service';
+import { UploadedPhoto } from './kck.types';
 
 @Controller('kck')
 export class KckController {
   constructor(private readonly kck: KckService) {}
 
   @Post('prepare')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: memoryStorage(),
-    limits: { fileSize: 7 * 1024 * 1024, files: 1 },
-  }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 7 * 1024 * 1024, files: 1 },
+    }),
+  )
   prepare(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: UploadedPhoto,
     @Body('latitude', ParseFloatPipe) latitude: number,
     @Body('longitude', ParseFloatPipe) longitude: number,
     @Body('playerId') playerId?: string,
     @Body('line') line?: string,
     @Body('categoryHint') categoryHint?: KategoriaKck,
   ) {
-    return this.kck.prepare({ latitude, longitude, playerId, line, categoryHint: categoryHint ?? null }, file);
+    if (!file) throw new BadRequestException('Wymagane zdjęcie w polu file.');
+    return this.kck.prepare(
+      {
+        latitude,
+        longitude,
+        playerId,
+        line,
+        categoryHint: categoryHint ?? null,
+      },
+      file,
+    );
   }
 
   @Post('submit')
   submit(@Body() body: Record<string, unknown>) {
-    const required = ['draftId', 'submissionId', 'category', 'summary', 'description', 'streetName', 'buildingNumber', 'zipCode'];
+    const required = [
+      'draftId',
+      'submissionId',
+      'category',
+      'summary',
+      'description',
+      'streetName',
+      'buildingNumber',
+      'zipCode',
+    ];
     for (const key of required) {
-      if (typeof body[key] !== 'string') throw new BadRequestException(`Pole ${key} musi być stringiem.`);
+      if (typeof body[key] !== 'string') {
+        throw new BadRequestException(`Pole ${key} musi być stringiem.`);
+      }
     }
+
     return this.kck.submit({
       draftId: body.draftId as string,
       submissionId: body.submissionId as string,
@@ -60,7 +83,10 @@ export class KckController {
   }
 
   @Get('incidents/:id/photo')
-  async getPhoto(@Param('id') id: string, @Res() response: Response): Promise<void> {
+  async getPhoto(
+    @Param('id') id: string,
+    @Res() response: Response,
+  ): Promise<void> {
     const photo = await this.kck.getPhoto(id);
     response.type(photo.mimeType).send(photo.buffer);
   }
