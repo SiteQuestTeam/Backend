@@ -1,13 +1,24 @@
-import { BadGatewayException, BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { AiBlad, KategoriaKck, przygotujUsterkeKck } from '../ai/ai-core';
+import { KategoriaKck, przygotujUsterkeKck } from '../ai/ai-core';
 import { AddressService } from '../address/address.service';
 import { PointsService } from '../points/points.service';
 import { PhotoStorageService } from '../storage/photo-storage.service';
 import { CityIncidentStore } from './city-incident.store';
 import { KCK_CATEGORY_IDS } from './kck.constants';
 import { KckAmbiguousError, KckClient, KckHttpError } from './kck.client';
-import { CityIncident, KckIncidentDto } from './kck.types';
+import {
+  CityIncidentRecord,
+  KckIncidentDto,
+  SubmitKckInput,
+  UploadedPhoto,
+} from './kck.types';
 
 export interface PrepareIncidentInput {
   latitude: number;
@@ -15,17 +26,6 @@ export interface PrepareIncidentInput {
   playerId?: string;
   line?: string;
   categoryHint?: KategoriaKck | null;
-}
-
-export interface SubmitIncidentInput {
-  draftId: string;
-  submissionId: string;
-  category: KategoriaKck;
-  summary: string;
-  description: string;
-  streetName: string;
-  buildingNumber: string;
-  zipCode: string;
 }
 
 @Injectable()
@@ -38,88 +38,111 @@ export class KckService {
     private readonly points: PointsService,
   ) {}
 
-  async prepare(input: PrepareIncidentInput, photo: Express.Multer.File) {
+  async prepare(input: PrepareIncidentInput, photo: UploadedPhoto) {
     this.validateCoordinates(input.latitude, input.longitude);
-    this.validatePhoto(photo);
-
-    const draftId = randomUUID();
-    const savedPhoto = await this.photos.save(draftId, photo);
 
     const [aiSettled, addressSettled] = await Promise.allSettled([
-      przygotujUsterkeKck(photo.buffer, { linia_gracza: input.line, kategoria: input.categoryHint }),
-      this.address.reverseGeocode(input.latitude, input.longitude),
+      przygotujUsterkeKck(photo.buffer, {
+        linia_gracza: input.line,
+        kategoria: input.categoryHint,
+      }),
+      this.address.fromGps(input.latitude, input.longitude),
     ]);
 
-    if (aiSettled.status === 'fulfilled' && aiSettled.value.wynik.status === 'RETAKE') {
-      await this.photos.remove(savedPhoto.key);
+    if (
+      aiSettled.status === 'fulfilled' &&
+      aiSettled.value.wynik.status === 'RETAKE'
+    ) {
       return { status: 'RETAKE', ...aiSettled.value.wynik };
     }
 
-    const ai = aiSettled.status === 'fulfilled' ? aiSettled.value.wynik : null;
-    const address = addressSettled.status === 'fulfilled' ? addressSettled.value : null;
+    const ai =
+      aiSettled.status === 'fulfilled' && aiSettled.value.wynik.status === 'OK'
+        ? aiSettled.value.wynik
+        : null;
+    const address =
+      addressSettled.status === 'fulfilled' ? addressSettled.value : null;
 
-    const incident: CityIncident = {
+    // Zdjęcie zapisujemy w SideQuest niezależnie od powodzenia AI/geocodingu.
+    // Dzięki temu submit używa dokładnie tego samego Live photo co prepare.
+    const storedPhoto = await this.photos.saveKckPhoto(photo);
+    const draftId = randomUUID();
+    const now = new Date().toISOString();
+
+    const record: CityIncidentRecord = {
       id: draftId,
       playerId: input.playerId?.trim() || null,
       latitude: input.latitude,
       longitude: input.longitude,
-      category: ai?.status === 'OK' ? ai.category : null,
-      summary: ai?.status === 'OK' ? ai.summary : null,
-      description: ai?.status === 'OK' ? ai.description : null,
-      streetName: address?.streetName ?? null,
-      buildingNumber: address?.buildingNumber ?? null,
-      zipCode: address?.zipCode ?? null,
-      photoKey: savedPhoto.key,
-      photoMimeType: savedPhoto.mimeType,
-      photoFileName: savedPhoto.fileName,
-      kckIncidentId: null,
-      submissionId: null,
+      category: ai?.category ?? null,
+      summary: ai?.summary ?? null,
+      description: ai?.description ?? null,
+      address,
+      photo: storedPhoto,
       status: 'PREPARED',
+      submissionId: null,
+      kckIncidentId: null,
+      lastError: null,
       pointsGrantedAt: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
-    await this.incidents.create(incident);
+
+    await this.incidents.create(record);
 
     return {
       status: 'PREPARED',
       draftId,
       photoUrl: `/kck/incidents/${draftId}/photo`,
-      aiAvailable: aiSettled.status === 'fulfilled',
-      addressAvailable: addressSettled.status === 'fulfilled',
-      category: incident.category,
-      serviceExternalId: incident.category ? KCK_CATEGORY_IDS[incident.category] : null,
-      summary: incident.summary,
-      description: incident.description,
-      address: {
-        streetName: incident.streetName,
-        buildingNumber: incident.buildingNumber,
-        zipCode: incident.zipCode,
-      },
-      latitude: incident.latitude,
-      longitude: incident.longitude,
+      aiAvailable: ai !== null,
+      addressAvailable: address !== null,
+      category: record.category,
+      serviceExternalId: record.category
+        ? KCK_CATEGORY_IDS[record.category]
+        : null,
+      summary: record.summary,
+      description: record.description,
+      address: record.address,
+      latitude: record.latitude,
+      longitude: record.longitude,
     };
   }
 
-  async submit(input: SubmitIncidentInput) {
-    const incident = await this.incidents.find(input.draftId);
-    if (!incident) throw new NotFoundException('Nie znaleziono przygotowanej Usterki.');
+  async submit(input: SubmitKckInput) {
+    const incident = await this.incidents.get(input.draftId);
 
     if (incident.status === 'SUBMITTED') {
       if (incident.submissionId === input.submissionId) {
-        return { status: 'SUBMITTED', incidentId: incident.kckIncidentId, pointsGrantedAt: incident.pointsGrantedAt };
+        return {
+          status: 'SUBMITTED',
+          incidentId: incident.kckIncidentId,
+          pointsGrantedAt: incident.pointsGrantedAt,
+        };
       }
       throw new ConflictException('Ta Usterka została już wysłana.');
     }
+
     if (incident.status === 'UNCERTAIN') {
-      throw new ConflictException('Poprzednia wysyłka ma niejednoznaczny wynik. Nie ponawiamy automatycznie zgłoszenia do KCK.');
+      throw new ConflictException(
+        'Poprzednia wysyłka ma niejednoznaczny wynik. Nie ponawiamy automatycznie zgłoszenia do KCK.',
+      );
     }
-    if (incident.status === 'SUBMITTING' && incident.submissionId === input.submissionId) {
+
+    if (
+      incident.status === 'SUBMITTING' &&
+      incident.submissionId === input.submissionId
+    ) {
       throw new ConflictException('To zgłoszenie jest już wysyłane.');
     }
 
     this.validateSubmission(input);
-    await this.incidents.update(incident.id, { status: 'SUBMITTING', submissionId: input.submissionId });
+
+    await this.incidents.update(incident.id, (current) => ({
+      ...current,
+      status: 'SUBMITTING',
+      submissionId: input.submissionId,
+      lastError: null,
+    }));
 
     const dto: KckIncidentDto = {
       requestType: 'ISSUE',
@@ -143,26 +166,37 @@ export class KckService {
     };
 
     try {
-      const photoBuffer = await this.photos.read(incident.photoKey);
+      const photoBuffer = await this.photos.read(incident.photo);
       const incidentId = await this.client.submitIncident(dto, {
         buffer: photoBuffer,
-        mimeType: incident.photoMimeType,
-        fileName: incident.photoFileName,
+        mimeType: incident.photo.mimetype,
+        fileName: incident.photo.originalName,
       });
-      const submitted = await this.incidents.update(incident.id, {
+
+      let submitted = await this.incidents.update(incident.id, (current) => ({
+        ...current,
         category: input.category,
         summary: dto.summary,
         description: dto.description,
-        streetName: dto.streetName,
-        buildingNumber: dto.buildingNumber,
-        zipCode: dto.zipCode,
+        address: {
+          streetName: dto.streetName,
+          buildingNumber: dto.buildingNumber,
+          zipCode: dto.zipCode,
+        },
         kckIncidentId: incidentId,
         status: 'SUBMITTED',
-      });
+        lastError: null,
+      }));
 
-      const points = await this.points.grantForKckIncident(submitted);
+      const points = await this.points.awardCityIncident(
+        submitted.playerId,
+        submitted.id,
+      );
       if (points.granted) {
-        await this.incidents.update(incident.id, { pointsGrantedAt: new Date().toISOString() });
+        submitted = await this.incidents.update(incident.id, (current) => ({
+          ...current,
+          pointsGrantedAt: new Date().toISOString(),
+        }));
       }
 
       return {
@@ -170,36 +204,47 @@ export class KckService {
         incidentId,
         photoUrl: `/kck/incidents/${incident.id}/photo`,
         pointsGranted: points.granted ? points.points : 0,
+        pointsGrantedAt: submitted.pointsGrantedAt,
       };
     } catch (error) {
       if (error instanceof KckAmbiguousError) {
-        await this.incidents.update(incident.id, { status: 'UNCERTAIN' });
+        await this.incidents.update(incident.id, (current) => ({
+          ...current,
+          status: 'UNCERTAIN',
+          lastError: error.message,
+        }));
         throw new ServiceUnavailableException(error.message);
       }
-      await this.incidents.update(incident.id, { status: 'FAILED' });
-      if (error instanceof KckHttpError) throw new BadGatewayException(error.message);
+
+      const message =
+        error instanceof Error ? error.message : 'Nieznany błąd wysyłki do KCK';
+      await this.incidents.update(incident.id, (current) => ({
+        ...current,
+        status: 'FAILED',
+        lastError: message,
+      }));
+
+      if (error instanceof KckHttpError) {
+        throw new BadGatewayException(error.message);
+      }
       throw error;
     }
   }
 
   async getIncident(id: string) {
-    const incident = await this.incidents.find(id);
-    if (!incident) throw new NotFoundException('Nie znaleziono Usterki.');
+    const incident = await this.incidents.get(id);
     return {
       id: incident.id,
       status: incident.status,
       category: incident.category,
       summary: incident.summary,
       description: incident.description,
-      address: {
-        streetName: incident.streetName,
-        buildingNumber: incident.buildingNumber,
-        zipCode: incident.zipCode,
-      },
+      address: incident.address,
       latitude: incident.latitude,
       longitude: incident.longitude,
       photoUrl: `/kck/incidents/${incident.id}/photo`,
       incidentId: incident.kckIncidentId,
+      lastError: incident.lastError,
       pointsGrantedAt: incident.pointsGrantedAt,
       createdAt: incident.createdAt,
       updatedAt: incident.updatedAt,
@@ -207,31 +252,43 @@ export class KckService {
   }
 
   async getPhoto(id: string) {
-    const incident = await this.incidents.find(id);
-    if (!incident) throw new NotFoundException('Nie znaleziono Usterki.');
+    const incident = await this.incidents.get(id);
     return {
-      buffer: await this.photos.read(incident.photoKey),
-      mimeType: incident.photoMimeType,
+      buffer: await this.photos.read(incident.photo),
+      mimeType: incident.photo.mimetype,
     };
   }
 
-  private validatePhoto(photo?: Express.Multer.File): asserts photo is Express.Multer.File {
-    if (!photo?.buffer?.length) throw new BadRequestException('Wymagane jest zdjęcie w polu file.');
-    if (!photo.mimetype.startsWith('image/')) throw new BadRequestException('Pole file musi być obrazem.');
-    if (photo.size > 7 * 1024 * 1024) throw new BadRequestException('Zdjęcie przekracza limit 7 MiB.');
-  }
-
   private validateCoordinates(latitude: number, longitude: number): void {
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) throw new BadRequestException('Niepoprawna szerokość geograficzna.');
-    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new BadRequestException('Niepoprawna długość geograficzna.');
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+      throw new BadRequestException('Niepoprawna szerokość geograficzna.');
+    }
+    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      throw new BadRequestException('Niepoprawna długość geograficzna.');
+    }
   }
 
-  private validateSubmission(input: SubmitIncidentInput): void {
-    if (!input.submissionId?.trim()) throw new BadRequestException('Wymagane submissionId.');
-    if (!Object.hasOwn(KCK_CATEGORY_IDS, input.category)) throw new BadRequestException('Niepoprawna kategoria KCK.');
-    if (!input.summary?.trim() || input.summary.trim().length > 60) throw new BadRequestException('Tytuł musi mieć 1–60 znaków.');
-    if (!input.description?.trim() || input.description.trim().length > 500) throw new BadRequestException('Opis musi mieć 1–500 znaków.');
-    if (!input.streetName?.trim()) throw new BadRequestException('Wymagana ulica.');
-    if (!input.zipCode?.trim()) throw new BadRequestException('Wymagany kod pocztowy.');
+  private validateSubmission(input: SubmitKckInput): void {
+    if (!input.submissionId?.trim()) {
+      throw new BadRequestException('Wymagane submissionId.');
+    }
+    if (!Object.hasOwn(KCK_CATEGORY_IDS, input.category)) {
+      throw new BadRequestException('Niepoprawna kategoria KCK.');
+    }
+    if (!input.summary?.trim() || input.summary.trim().length > 60) {
+      throw new BadRequestException('Tytuł musi mieć 1–60 znaków.');
+    }
+    if (
+      !input.description?.trim() ||
+      input.description.trim().length > 500
+    ) {
+      throw new BadRequestException('Opis musi mieć 1–500 znaków.');
+    }
+    if (!input.streetName?.trim()) {
+      throw new BadRequestException('Wymagana ulica.');
+    }
+    if (!input.zipCode?.trim()) {
+      throw new BadRequestException('Wymagany kod pocztowy.');
+    }
   }
 }
