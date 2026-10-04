@@ -18,6 +18,7 @@ FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV DATABASE_URL=file:./dev.db
+ENV KCK_MODE=live
 
 WORKDIR /app
 
