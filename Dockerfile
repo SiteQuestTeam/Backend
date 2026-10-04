@@ -23,7 +23,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prompts ./prompts
 
-USER node
+# Zdjęcia i metadane Usterek są trwałymi danymi aplikacji.\nRUN mkdir -p /app/data && chown -R node:node /app/data\nVOLUME [\"/app/data\"]\n\nUSER node
 
 EXPOSE 3000
 
