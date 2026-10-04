@@ -5,7 +5,6 @@ import { stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline';
 import {
   BriefInicjatywy,
-  BriefUsterki,
   DaneKrok1,
   Koszt,
   Odpowiedz,
@@ -164,6 +163,11 @@ async function main(): Promise<void> {
     if (odp.toLowerCase() === 'z') typ = inny;
   }
 
+  if (typ === 'usterka') {
+    console.log(szary('  Usterkę testuj przez POST /kck/prepare — ma osobny prompt i endpoint KCK.'));
+    return;
+  }
+
   const odpowiedzi: Odpowiedz[] = [];
   if (typ === 'inicjatywa') {
     for (const [i, p] of w1.questions.entries()) {
@@ -180,7 +184,6 @@ async function main(): Promise<void> {
   for (;;) {
     console.log(szary('  …AI pisze Brief'));
     const { wynik, ostrzezenia, koszt } = await krok2(zdjecie, {
-      typ,
       kategoria: typ === w1.type ? w1.category : null,
       linia_gracza: dane.linia_gracza,
       odpowiedzi,
@@ -215,25 +218,17 @@ async function main(): Promise<void> {
   console.log(szary(`\nKoszt całej rozmowy: ok. $${kosztSesji.toFixed(4)}. Log: logs/ai.jsonl`));
 }
 
-function pokazBrief(brief: BriefInicjatywy | BriefUsterki): void {
+function pokazBrief(brief: BriefInicjatywy): void {
   const ai = (zrodlo: string) => (zrodlo === 'ai' ? '✨ propozycja AI: ' : '');
-  if (brief.type === 'inicjatywa') {
-    ekran('Brief Inicjatywy');
-    console.log(`Tytuł: ${brief.title}`);
-    console.log(`Kategoria: ${brief.category}`);
-    console.log(`Problem: ${brief.problem}`);
-    console.log(`Proponowane działanie: ${ai(brief.proposed_action.source)}${brief.proposed_action.text}`);
-    console.log(`Dlaczego to ważne: ${brief.why_it_matters}`);
-    console.log(`Potrzebne zasoby: ${ai(brief.resources.source)}${brief.resources.text}`);
-    console.log(`Kto naprawi: ${ktoNaprawi(brief)} (pewność: ${brief.who_fixes.confidence}). ${brief.who_fixes.reason}`);
-    console.log('[ Popraw ]   [ Opublikuj ]');
-  } else {
-    ekran('Zgłoszenie Usterki do KCK');
-    console.log(`Tytuł: ${brief.summary}`);
-    console.log(`Kategoria KCK: ${brief.category}`);
-    console.log(`Opis: ${brief.description}`);
-    console.log('[ Popraw ]   [ Wyślij do KCK ]');
-  }
+  ekran('Brief Inicjatywy');
+  console.log(`Tytuł: ${brief.title}`);
+  console.log(`Kategoria: ${brief.category}`);
+  console.log(`Problem: ${brief.problem}`);
+  console.log(`Proponowane działanie: ${ai(brief.proposed_action.source)}${brief.proposed_action.text}`);
+  console.log(`Dlaczego to ważne: ${brief.why_it_matters}`);
+  console.log(`Potrzebne zasoby: ${ai(brief.resources.source)}${brief.resources.text}`);
+  console.log(`Kto naprawi: ${ktoNaprawi(brief)} (pewność: ${brief.who_fixes.confidence}). ${brief.who_fixes.reason}`);
+  console.log('[ Popraw ]   [ Opublikuj ]');
 }
 
 main()
