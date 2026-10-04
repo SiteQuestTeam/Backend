@@ -97,6 +97,10 @@ The CLI is a presentation tool, not a second business-logic implementation. It p
 - Admin API: validation errors -> `400`; missing resource -> `404`; invalid token -> `401`; disabled API -> `404`; broken business rule -> existing `409` or `403` semantics.
 - KCK: no admin action may claim that an external incident was accepted unless the actual client returned an `incidentId`.
 
+## KCK analysis screen
+
+The KCK preparation state in the mobile app keeps the global header full width. Its loading content is centered inside a separate body container, rather than using a centered parent for the header and body together. The visible state distinguishes location lookup from AI analysis and preserves the existing retry/back action.
+
 ## Verification
 
 1. Fresh database has no public initiatives or rewards until they are created deliberately.
@@ -105,3 +109,4 @@ The CLI is a presentation tool, not a second business-logic implementation. It p
 4. A normal vote follows the 50-metre and one-vote rules; an admin vote calls the same rule.
 5. Deleting or editing administration records preserves database consistency.
 6. Existing KCK and app contract tests, TypeScript build, API integration tests, and Expo web export pass.
+7. The KCK preparation screen renders a full-width header and centered loading body on narrow mobile widths.
