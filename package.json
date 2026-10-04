@@ -14,22 +14,26 @@
     "prisma:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.cjs",
-    "db:setup": "npm run prisma:generate && npm run db:push && npm run db:seed"
+    "db:setup": "npm run prisma:generate && npm run db:push && npm run db:seed",
+    "czat": "tsx scripts/czat.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-express": "^11.1.6",
+    "openai": "^7.27.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "@prisma/client": "^6.19.0"
+    "@prisma/client": "^6.19.0",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.10",
     "@types/node": "^24.3.0",
     "prettier": "^3.6.2",
-    "typescript": "^5.9.2",
-    "prisma": "^6.19.0"
+    "prisma": "^6.19.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.2"
   },
   "prisma": {
     "seed": "node prisma/seed.cjs"

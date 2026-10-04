@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SideQuest, krok 1: zdjęcie → typ i pytania",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "danger",
+    "faces_in_background",
+    "retake_reason",
+    "message",
+    "duplicate_of",
+    "type",
+    "type_locked",
+    "type_reason",
+    "category",
+    "questions"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "nowe_zdjecie",
+        "niezrozumiale",
+        "nie_widac_usterki",
+        "opisz_zmiane"
+      ],
+      "description": "ok = idziemy dalej. nowe_zdjecie = Gracz robi zdjęcie jeszcze raz. niezrozumiale = linia Gracza bez sensu. nie_widac_usterki = linia mówi o usterce, której nie widać. opisz_zmiane = nie widać problemu i linia jest pusta."
+    },
+    "danger": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Jedno zdanie: jakie możliwe zagrożenie widać. null, gdy nic. Nie przerywa rozmowy, aplikacja pokazuje ostrzeżenie."
+    },
+    "faces_in_background": {
+      "type": "boolean",
+      "description": "true, gdy widać rozpoznawalne twarze, ale tylko jako szczegół większej całości (np. przechodnie na ulicy). Zdjęcie jest wtedy w porządku, aplikacja pokazuje informację."
+    },
+    "retake_reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "brak_miejsca_publicznego",
+            "teren_prywatny",
+            "twarze_lub_tablice",
+            "zla_jakosc",
+            "tresc_obrazliwa"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Tylko przy status = nowe_zdjecie."
+    },
+    "message": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Jedno zdanie do Gracza. Tylko przy nowe_zdjecie i nie_widac_usterki. Przy innych statusach aplikacja pokazuje stały tekst."
+    },
+    "duplicate_of": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "id zgłoszenia z listy zgloszenia_w_poblizu, gdy to chyba to samo. Nigdy wymyślone id."
+    },
+    "type": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "usterka",
+            "inicjatywa"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "type_locked": {
+      "type": "boolean",
+      "description": "true tylko dla Usterki, której AI jest pewne. Wtedy nie ma swipe'a."
+    },
+    "type_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Jedno zdanie: co widać i dlaczego ten typ."
+    },
+    "category": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "DAMAGE",
+            "POLLUTION",
+            "GREENERY",
+            "ANIMALS",
+            "OTHER",
+            "zdrowie",
+            "infrastruktura",
+            "edukacja",
+            "kultura",
+            "bezpieczenstwo",
+            "zielen",
+            "sport",
+            "rowery",
+            "spoleczenstwo"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Usterka (kategorie KCK): DAMAGE, POLLUTION, GREENERY, ANIMALS, OTHER. Inicjatywa (kategorie Budżetu Obywatelskiego): zdrowie, infrastruktura, edukacja, kultura, bezpieczenstwo, zielen, sport, rowery, spoleczenstwo. Serwer sprawdza, czy kategoria pasuje do typu."
+    },
+    "questions": {
+      "type": "array",
+      "description": "Usterka z type_locked = true: pusta lista. W każdym innym przypadku dokładnie 2, w kolejności dzialanie, zasoby.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "topic",
+          "question",
+          "suggestions"
+        ],
+        "properties": {
+          "topic": {
+            "type": "string",
+            "enum": [
+              "dzialanie",
+              "zasoby"
+            ]
+          },
+          "question": {
+            "type": "string"
+          },
+          "suggestions": {
+            "type": "array",
+            "description": "2–3 podpowiedzi. Tylko szczegóły pomysłu Gracza, nigdy nowy pomysł.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "maxItems": 3
+          }
+        }
+      },
+      "minItems": 0,
+      "maxItems": 2
+    }
+  }
+}

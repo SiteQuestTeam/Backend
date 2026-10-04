@@ -8,6 +8,7 @@ RUN npm install
 
 COPY nest-cli.json tsconfig*.json ./
 COPY src ./src
+COPY prompts ./prompts
 
 ENV DATABASE_URL=file:./dev.db
 RUN npm run db:setup && npm run build && npm prune --omit=dev
@@ -24,6 +25,7 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build --chown=node:node /app/prisma ./prisma
+COPY --from=build /app/prompts ./prompts
 
 USER node
 
