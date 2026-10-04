@@ -32,8 +32,8 @@ export interface Odpowiedz {
   odpowiedz: string;
 }
 
+/** Krok 2 dotyczy tylko Inicjatywy. Usterkę obsługuje osobny prompt KCK. */
 export interface DaneKrok2 {
-  typ: Typ;
   kategoria: string | null;
   linia_gracza: string;
   odpowiedzi: Odpowiedz[];
@@ -53,6 +53,8 @@ export interface WynikKrok1 {
   status: 'ok' | 'nowe_zdjecie' | 'niezrozumiale' | 'nie_widac_usterki' | 'opisz_zmiane';
   /** Możliwe zagrożenie. Nie przerywa rozmowy: aplikacja pokazuje ostrzeżenie. */
   danger: string | null;
+  /** energia = prąd: aplikacja pokazuje też Pogotowie Energetyczne 991. */
+  danger_kind: 'energia' | 'inne' | null;
   /** Twarze tylko jako szczegół całości: zdjęcie przechodzi, aplikacja pokazuje informację. */
   faces_in_background: boolean;
   retake_reason: string | null;
@@ -67,14 +69,6 @@ export interface WynikKrok1 {
 
 /** Oficjalne kategorie KCK. Na serviceExternalId zamienia je moduł KCK, nie AI. */
 export type KategoriaKck = 'DAMAGE' | 'POLLUTION' | 'GREENERY' | 'ANIMALS' | 'OTHER';
-
-/** Zgłoszenie Usterki. Pola summary i description idą do KCK bez zmian. */
-export interface BriefUsterki {
-  type: 'usterka';
-  summary: string;
-  category: KategoriaKck;
-  description: string;
-}
 
 export interface BriefInicjatywy {
   type: 'inicjatywa';
@@ -91,8 +85,31 @@ export interface WynikKrok2 {
   status: 'brief' | 'niezrozumiale' | 'pytanie_zwrotne';
   unclear_topic: Temat | null;
   follow_up: string | null;
-  brief: BriefInicjatywy | BriefUsterki | null;
+  brief: BriefInicjatywy | null;
 }
+
+export interface DaneKck {
+  linia_gracza: string;
+  /** Kategoria z kroku 1, gdy był. To tylko podpowiedź. */
+  kategoria_podpowiedz: KategoriaKck | null;
+}
+
+/** Surowa odpowiedź modelu według prompts/schema-kck.json. */
+interface WynikKck {
+  status: 'OK' | 'RETAKE';
+  retake_reason: PowodRetake | null;
+  message: string | null;
+  category: KategoriaKck | null;
+  summary: string | null;
+  description: string | null;
+}
+
+export type PowodRetake = 'NO_INCIDENT' | 'POOR_QUALITY' | 'FACES_OR_PLATES' | 'INAPPROPRIATE';
+
+/** Wynik dla modułu KCK (`POST /kck/prepare`): gotowe pola albo prośba o nowe zdjęcie. */
+export type KckAiResult =
+  | { status: 'OK'; category: KategoriaKck; summary: string; description: string }
+  | { status: 'RETAKE'; reason: PowodRetake; message: string };
 
 export interface Koszt {
   model: string;
@@ -156,27 +173,44 @@ function blokDanych(dane: object): string {
   return `<dane>\n${linie.join('\n')}\n</dane>`;
 }
 
-async function wywolaj<T>(krok: 1 | 2, zdjecieBase64: string, dane: object): Promise<OdpowiedzAi<T>> {
+interface Zadanie {
+  /** Nazwa w logu i w formacie odpowiedzi. */
+  nazwa: string;
+  prompt: string;
+  schemat: string;
+}
+
+const KROK_1: Zadanie = { nazwa: 'krok_1', prompt: 'prompt-1.md', schemat: 'schema-krok-1.json' };
+const KROK_2: Zadanie = { nazwa: 'krok_2', prompt: 'prompt-2.md', schemat: 'schema-krok-2.json' };
+const KCK: Zadanie = { nazwa: 'kck', prompt: 'prompt-kck.md', schemat: 'schema-kck.json' };
+
+async function wywolaj<T>(zadanie: Zadanie, zdjecieBase64: string, dane: object, sprawdz: (wynik: T) => string[]): Promise<OdpowiedzAi<T>> {
   const model = process.env.OPENAI_MODEL ?? 'gpt-6.1-sol';
   const effort = (process.env.OPENAI_REASONING_EFFORT ?? 'low') as OpenAI.ReasoningEffort;
 
-  const response = await openai().responses.create({
-    model,
-    reasoning: { effort },
-    instructions: plik(`prompt-${krok}.md`),
-    input: [
-      {
-        role: 'user',
-        content: [
-          { type: 'input_image', image_url: `data:image/jpeg;base64,${zdjecieBase64}`, detail: 'auto' },
-          { type: 'input_text', text: blokDanych(dane) },
-        ],
+  const response = await openai().responses.create(
+    {
+      model,
+      reasoning: { effort },
+      // Nie potrzebujemy stanu odpowiedzi po stronie OpenAI. Domyślnie trzymałby ją co najmniej 30 dni.
+      store: false,
+      instructions: plik(zadanie.prompt),
+      input: [
+        {
+          role: 'user',
+          content: [
+            { type: 'input_image', image_url: `data:image/jpeg;base64,${zdjecieBase64}`, detail: 'auto' },
+            { type: 'input_text', text: blokDanych(dane) },
+          ],
+        },
+      ],
+      text: {
+        format: { type: 'json_schema', name: zadanie.nazwa, schema: JSON.parse(plik(zadanie.schemat)), strict: true },
       },
-    ],
-    text: {
-      format: { type: 'json_schema', name: `krok_${krok}`, schema: JSON.parse(plik(`schema-krok-${krok}.json`)), strict: true },
     },
-  });
+    // Krótki, przewidywalny czas: bez automatycznych ponowień SDK. Ponowienie to decyzja aplikacji.
+    { timeout: Number(process.env.OPENAI_TIMEOUT_MS ?? 8000), maxRetries: 0 },
+  );
 
   for (const element of response.output) {
     if (element.type !== 'message') continue;
@@ -189,49 +223,41 @@ async function wywolaj<T>(krok: 1 | 2, zdjecieBase64: string, dane: object): Pro
   }
 
   const wynik = JSON.parse(response.output_text) as T;
-  const ostrzezenia = krok === 1 ? sprawdzKrok1(wynik as WynikKrok1) : sprawdzKrok2(wynik as WynikKrok2);
+  const ostrzezenia = sprawdz(wynik);
   const koszt = policzKoszt(model, response.usage);
-  zapiszLog({ krok, model, dane, wynik, ostrzezenia, koszt });
+  zapiszLog({ zadanie: zadanie.nazwa, model, dane, wynik, ostrzezenia, koszt });
   return { wynik, ostrzezenia, koszt };
 }
 
 export function krok1(zdjecieBase64: string, dane: DaneKrok1): Promise<OdpowiedzAi<WynikKrok1>> {
-  return wywolaj<WynikKrok1>(1, zdjecieBase64, dane);
+  return wywolaj(KROK_1, zdjecieBase64, dane, sprawdzKrok1);
 }
 
 export function krok2(zdjecieBase64: string, dane: DaneKrok2): Promise<OdpowiedzAi<WynikKrok2>> {
-  return wywolaj<WynikKrok2>(2, zdjecieBase64, dane);
-}
-
-/** Wynik dla modułu KCK (`POST /kck/prepare`), w kształcie z docs/kck-ai-automation.md. */
-export interface KckAiResult {
-  category: KategoriaKck;
-  summary: string;
-  description: string;
+  return wywolaj(KROK_2, zdjecieBase64, dane, sprawdzKrok2);
 }
 
 /**
- * Pola zgłoszenia KCK ze zdjęcia Usterki. Moduł KCK wywołuje to równolegle z ustaleniem adresu.
- * Zakłada, że krok 1 już się odbył (zagrożenie, twarze, tablice, typ). Kategoria z kroku 1 jest podpowiedzią.
- * Przy błędzie AI rzuca wyjątek: moduł KCK pokazuje wtedy ręczne pola, zgłoszenie nie może się zablokować.
+ * Zdjęcie Usterki (już po przygotujZdjecie) → pola KCK, jedno wywołanie modelu.
+ * Limity są twarde: zły wynik rzuca AiBlad, a aplikacja pokazuje wtedy ręczne pola.
+ */
+export async function kck(zdjecieBase64: string, dane: DaneKck): Promise<OdpowiedzAi<KckAiResult>> {
+  const { wynik, ostrzezenia, koszt } = await wywolaj<WynikKck>(KCK, zdjecieBase64, dane, () => []);
+  return { wynik: sprawdzKck(wynik), ostrzezenia, koszt };
+}
+
+/**
+ * Dla modułu KCK (`POST /kck/prepare`, docs/kck-ai-automation.md): surowe zdjęcie → pola KCK albo RETAKE.
+ * Przy błędzie AI (timeout, odmowa, złamany limit) rzuca wyjątek: moduł KCK pokazuje wtedy ręczne pola.
  */
 export async function przygotujUsterkeKck(
   zdjecie: Buffer,
   opcje: { linia_gracza?: string; kategoria?: KategoriaKck | null } = {},
 ): Promise<OdpowiedzAi<KckAiResult>> {
-  const { wynik, ostrzezenia, koszt } = await krok2(await przygotujZdjecie(zdjecie), {
-    typ: 'usterka',
-    kategoria: opcje.kategoria ?? null,
+  return kck(await przygotujZdjecie(zdjecie), {
     linia_gracza: opcje.linia_gracza ?? '',
-    odpowiedzi: [],
-    pytanie_zwrotne_juz_zadane: false,
-    odpowiedz_na_pytanie_zwrotne: '',
-    adres: 'ustalany osobno z GPS',
-    dzielnica: 'nieznana',
+    kategoria_podpowiedz: opcje.kategoria ?? null,
   });
-  if (wynik.brief?.type !== 'usterka') throw new AiBlad('AI nie zwróciło zgłoszenia Usterki.');
-  const { category, summary, description } = wynik.brief;
-  return { wynik: { category, summary, description }, ostrzezenia, koszt };
 }
 
 /** Kto naprawi liczy serwer, nie AI. */
@@ -265,18 +291,27 @@ function sprawdzKrok2(w: WynikKrok2): string[] {
   dlugosc(o, 'follow_up', w.follow_up, 150);
   const b = w.brief;
   if (b === null) return o;
-  if (b.type === 'usterka') {
-    dlugosc(o, 'summary', b.summary, 60);
-    dlugosc(o, 'description', b.description, 500, 1);
-  } else {
-    dlugosc(o, 'title', b.title, 60);
-    dlugosc(o, 'problem', b.problem, 250, 60);
-    dlugosc(o, 'proposed_action', b.proposed_action.text, 250);
-    dlugosc(o, 'why_it_matters', b.why_it_matters, 250);
-    dlugosc(o, 'resources', b.resources.text, 250);
-    dlugosc(o, 'who_fixes.reason', b.who_fixes.reason, 150);
-  }
+  dlugosc(o, 'title', b.title, 60);
+  dlugosc(o, 'problem', b.problem, 250, 60);
+  dlugosc(o, 'proposed_action', b.proposed_action.text, 250);
+  dlugosc(o, 'why_it_matters', b.why_it_matters, 250);
+  dlugosc(o, 'resources', b.resources.text, 250);
+  dlugosc(o, 'who_fixes.reason', b.who_fixes.reason, 150);
   return o;
+}
+
+// KCK: twarde reguły. Zamiast ostrzeżenia odrzucamy wynik, bo trafia prosto do formularza miasta.
+function sprawdzKck(w: WynikKck): KckAiResult {
+  if (w.status === 'RETAKE') {
+    if (!w.retake_reason || !w.message?.trim()) throw new AiBlad('KCK: RETAKE bez powodu albo bez wiadomości.');
+    return { status: 'RETAKE', reason: w.retake_reason, message: w.message.trim() };
+  }
+  const summary = w.summary?.trim() ?? '';
+  const description = w.description?.trim() ?? '';
+  if (!w.category || !KATEGORIE_USTERKI.includes(w.category)) throw new AiBlad(`KCK: zła kategoria (${w.category}).`);
+  if (!summary || summary.length > 60) throw new AiBlad(`KCK: summary ma ${summary.length} znaków (wymagane 1–60).`);
+  if (!description || description.length > 500) throw new AiBlad(`KCK: description ma ${description.length} znaków (wymagane 1–500).`);
+  return { status: 'OK', category: w.category, summary, description };
 }
 
 function policzKoszt(model: string, usage: OpenAI.Responses.ResponseUsage | undefined): Koszt {
