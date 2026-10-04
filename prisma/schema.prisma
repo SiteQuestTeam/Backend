@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id                String              @id @default(cuid())
+  nickname          String              @unique
+  pointsBalance     Int                 @default(0)
+  totalPointsEarned Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  initiatives       Initiative[]
+  votes             Vote[]
+  redemptions       RewardRedemption[]
+  pointTransactions PointTransaction[]
+}
+
+model Initiative {
+  id                  String   @id @default(cuid())
+  initiatorId         String
+  initiator           Player   @relation(fields: [initiatorId], references: [id], onDelete: Cascade)
+  latitude            Float
+  longitude           Float
+  votesCount          Int      @default(0)
+  threshold           Int      @default(10)
+  status              String   @default("collecting")
+  title               String
+  shortTitle          String
+  category            String
+  problem             String
+  proposedAction      String
+  whyImportant        String
+  resourcesPeople     String
+  resourcesEquipment  String
+  resourcesTransport  String
+  fixer               String
+  place               String
+  photoUri            String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  votes               Vote[]
+
+  @@index([latitude, longitude])
+  @@index([status])
+}
+
+model Vote {
+  id           String     @id @default(cuid())
+  playerId     String
+  initiativeId String
+  latitude     Float
+  longitude    Float
+  distanceM    Float
+  createdAt    DateTime   @default(now())
+  player       Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, initiativeId])
+  @@index([initiativeId])
+}
+
+model Reward {
+  id          String             @id
+  title       String
+  description String
+  points      Int
+  sponsor     String
+  icon        String
+  active      Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  redemptions RewardRedemption[]
+}
+
+model RewardRedemption {
+  id        String   @id @default(cuid())
+  playerId  String
+  rewardId  String
+  points    Int
+  createdAt DateTime @default(now())
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  reward    Reward   @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+
+  @@index([playerId])
+}
+
+model PointTransaction {
+  id        String   @id @default(cuid())
+  playerId  String
+  amount    Int
+  type      String
+  reference String?
+  createdAt DateTime @default(now())
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+}
